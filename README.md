@@ -159,7 +159,7 @@ V1-specific (`app_wirelessv1_mower/wirelessv1/`): `device-setting`, `device-sett
 
 ## References
 
-- Home Assistant integration used as the API reference: <https://github.com/Bouni/sunseeker-lawn-mower>
+- Home Assistant integration used as the API reference: <https://github.com/Sdahl1234/Sunseeker-lawn-mower>
 - json2iob: <https://github.com/TA2k/json2iob>
 
 ## Changelog
