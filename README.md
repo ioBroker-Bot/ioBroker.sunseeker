@@ -178,7 +178,9 @@ V1-specific (`app_wirelessv1_mower/wirelessv1/`): `device-setting`, `device-sett
 
 - (TA2k) initial release
 
-[Older changelogs can be found there](CHANGELOG_OLD.md)## License
+[Older changelogs can be found there](CHANGELOG_OLD.md)
+
+## License
 
 MIT License
 
