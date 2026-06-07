@@ -853,7 +853,7 @@ class SunseekerAdapter extends utils.Adapter {
                     "zh-cn": "实时地图（渲染后的PNG数据URL）",
                 },
                 type: "string",
-                role: "value",
+                role: "state",
                 read: true,
                 write: false,
             },
