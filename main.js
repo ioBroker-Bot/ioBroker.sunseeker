@@ -508,7 +508,7 @@ class SunseekerAdapter extends utils.Adapter {
                     "zh-cn": `地图-${kind}（数据 URL)`,
                 },
                 type: "string",
-                role: "value",
+                role: "state",
                 read: true,
                 write: false,
             },
