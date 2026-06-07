@@ -91,12 +91,22 @@ Raw payloads (REST and MQTT) are written through `json2iob` directly — no para
 
 These settings are made writable directly under `<sn>.settings.*`. Writing them sends a `set_property` / `setProperty` (model-dependent) request to the cloud:
 
-| State               | Range                  | Unit | Notes         |
-| ------------------- | ---------------------- | ---- | ------------- |
-| `bladeSpeed`        | 2800 – 3000 (step 100) | rpm  | New API only  |
-| `bladeHeight`       | 20 – 100 (step 5)      | mm   | New API only  |
-| `rainFlag`          | boolean                | —    | Old + New API |
-| `rainDelayDuration` | 0 – 720 (step 1)       | min  | Old + New API |
+| State                  | Range                                                          | Unit | Notes         |
+| ---------------------- | -------------------------------------------------------------- | ---- | ------------- |
+| `bladeSpeed`           | 2800 – 3000 (step 100)                                         | rpm  | New API only  |
+| `bladeHeight`          | 20 – 100 (step 5)                                              | mm   | New API only  |
+| `rainFlag`             | boolean                                                        | —    | Old + New API |
+| `rainDelayDuration`    | 0 – 720 (step 1)                                               | min  | Old + New API |
+| `night_work`           | boolean                                                        | —    | New API only  |
+| `recharge_mode`        | 0 = direct path<br>1 = smart<br>2 = along edge                 | —    | New API only  |
+| `work_touch_mode`      | 0 = no touch<br>1 = slow touch                                 | —    | New API only  |
+| `auto_ride_edge_map_m` | 0 = not enabled<br>1 = enabled                                 | —    | New API only  |
+| `dis_along_border`     | 0 = close<br>1 = far                                           | —    | New API only  |
+| `first_along_border`   | boolean                                                        | —    | New API only  |
+| `follow_border_freq`   | 0 = everytime<br>1 = every second time<br>2 = every third time | —    | New API only  |
+| `plan_mode`            | 0 = default<br>1 = traceless<br>4 = multi-angle                | —    | New API only  |
+| `gap`                  | 2 = standard<br>3 = wide                                       | —    | New API only  |
+| `speed`                | 1 = slow<br>2 = standard<br>3 = fast                           | —    | New API only  |
 
 When writing blade values, the adapter posts `{ id: "setDevBlade", key: "blade", method: "set_property", speed|height: <int> }`. After 1.5 s a status refresh is scheduled; MQTT push usually updates the values as well.
 
@@ -169,12 +179,16 @@ V1-specific (`app_wirelessv1_mower/wirelessv1/`): `device-setting`, `device-sett
     ### **WORK IN PROGRESS**
 -->
 
+### **WORK IN PROGRESS**
+
+- (Lucky-ESA) Added settings
+
 ### 0.0.2 (2026-05-29)
 
 - (ioBroker-Bot) Adapter requires admin >= 7.8.23 now.
 - (Lucky-ESA) Added event log
 
-### 0.0.1
+### 0.0.1 (2026-05-15)
 
 - (TA2k) initial release
 

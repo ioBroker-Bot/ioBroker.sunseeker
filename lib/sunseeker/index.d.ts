@@ -80,10 +80,12 @@ declare class Sunseeker extends EventEmitter {
     updateDevice(sn: string): Promise<void>;
     sendCommand(sn: string, command: string, value?: any): Promise<void>;
     setBlade(sn: string, key: "speed" | "height", value: number): Promise<void>;
+    setSettings(sn: string, value: number | boolean | null, id: string, key: string): Promise<void>;
     setRain(sn: string, flag: boolean, durationMin: number): Promise<void>;
     setSchedule(sn: string, plan: Record<string, any>): Promise<void>;
     parseScheduleDay(value: string): { startSec: number; endSec: number } | null;
     secToHms(sec: number): string;
+    setMowEfficiency(sn: string, gap: number, speed: number): Promise<void>;
 
     // mqtt.js
     initMqtt(): void;

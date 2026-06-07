@@ -38,6 +38,8 @@ class SunseekerAdapter extends utils.Adapter {
         this.updateDeviceBlade = null;
         this.updateDeviceSet = null;
         this.createObjectDone = {};
+        this.firstStart = {};
+        this.firstStartTimeout = null;
     }
 
     async onReady() {
@@ -112,6 +114,7 @@ class SunseekerAdapter extends utils.Adapter {
                 this.sunseeker = null;
             }
             this.updateDeviceCommand && this.clearTimeout(this.updateDeviceCommand);
+            this.firstStartTimeout && this.clearTimeout(this.firstStartTimeout);
             this.updateDeviceRain && this.clearTimeout(this.updateDeviceRain);
             this.updateDeviceBlade && this.clearTimeout(this.updateDeviceBlade);
             this.updateDeviceSet && this.clearTimeout(this.updateDeviceSet);
@@ -339,7 +342,6 @@ class SunseekerAdapter extends utils.Adapter {
         }
         if (settings) {
             const normalized = this.normalizeSettings(settings);
-            await this.ensureWritableSettings(sn, normalized);
             await this.json2iob.parse(`${sn}.settings`, normalized, {
                 channelName: {
                     en: "Settings",
@@ -357,6 +359,7 @@ class SunseekerAdapter extends utils.Adapter {
                 forceIndex: false,
                 states,
             });
+            await this.ensureWritableSettings(sn, normalized);
         }
     }
 
@@ -383,7 +386,7 @@ class SunseekerAdapter extends utils.Adapter {
         return out;
     }
 
-    onSunseekerMqtt({ sn, data }) {
+    onSunseekerMqtt({ sn, data, id }) {
         if (!data) {
             return;
         }
@@ -410,6 +413,321 @@ class SunseekerAdapter extends utils.Adapter {
             },
             states: this.statesForDevice(sn),
         });
+        if (!this.firstStart[sn]) {
+            this.log.debug(`ID: ${id}`);
+            if (id === "getDevAllProperty") {
+                this.firstStart[sn] = true;
+                this.addWriteable(sn, data);
+            } else {
+                this.setSettings(sn, data);
+            }
+        } else {
+            this.setSettings(sn, data);
+        }
+    }
+
+    async addWriteable(sn, data) {
+        this.log.debug(`ID: ${sn}`);
+        this.firstStartTimeout = this.setTimeout(async () => {
+            this.firstStartTimeout = null;
+            if (data && data.night_work != null) {
+                await this.extendObject(`${sn}.settings.night_work`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Mowing at night",
+                            de: "Mähen bei Nacht",
+                            ru: "Кошение травы ночью",
+                            pt: "Cortar a grama à noite",
+                            nl: "'s Nachts maaien",
+                            fr: "Tondre la nuit",
+                            it: "Falciare di notte",
+                            es: "Cortar el césped por la noche.",
+                            pl: "Koszenie w nocy",
+                            uk: "Косіння вночі",
+                            "zh-cn": "夜间割草",
+                        },
+                        type: "boolean",
+                        role: "switch",
+                        write: true,
+                        read: true,
+                        def: false,
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.recharge_mode != null) {
+                await this.extendObject(`${sn}.settings.recharge_mode`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Docking Path",
+                            de: "Andockpfad",
+                            ru: "Путь стыковки",
+                            pt: "Caminho de ancoragem",
+                            nl: "Dokpad",
+                            fr: "Chemin d'amarrage",
+                            it: "Percorso di attracco",
+                            es: "Ruta de acoplamiento",
+                            pl: "Ścieżka dokowania",
+                            uk: "Шлях стикування",
+                            "zh-cn": "对接路径",
+                        },
+                        type: "number",
+                        role: "value",
+                        write: true,
+                        read: true,
+                        def: 0,
+                        states: {
+                            0: "direct path",
+                            1: "smart",
+                            2: "along edge",
+                        },
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.work_touch_mode != null) {
+                await this.extendObject(`${sn}.settings.work_touch_mode`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Obstacle Avoidance Strategy",
+                            de: "Strategie zur Vermeidung von Hindernissen",
+                            ru: "Стратегия избегания препятствий",
+                            pt: "Estratégia para Evitar Obstáculos",
+                            nl: "Obstakelvermijdingsstrategie",
+                            fr: "Stratégie d'évitement des obstacles",
+                            it: "Strategia di evitamento degli ostacoli",
+                            es: "Estrategia para evitar obstáculos",
+                            pl: "Strategia unikania przeszkód",
+                            uk: "Стратегія уникнення перешкод",
+                            "zh-cn": "避障策略",
+                        },
+                        type: "number",
+                        role: "value",
+                        write: true,
+                        read: true,
+                        def: 0,
+                        states: {
+                            0: "no touch",
+                            1: "slow touch",
+                        },
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.auto_ride_edge_map_m != null) {
+                await this.extendObject(`${sn}.settings.auto_ride_edge_map_m`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Automatic Edge Mapping",
+                            de: "Automatische Kantenerkennung",
+                            ru: "Автоматическое отображение границ",
+                            pt: "Mapeamento automático de bordas",
+                            nl: "Automatische randmapping",
+                            fr: "Cartographie automatique des bords",
+                            it: "Mappatura automatica dei bordi",
+                            es: "Mapeo automático de bordes",
+                            pl: "Automatyczne mapowanie krawędzi",
+                            uk: "Автоматичне картографування країв",
+                            "zh-cn": "自动边缘映射",
+                        },
+                        type: "number",
+                        role: "value",
+                        write: true,
+                        read: true,
+                        def: 0,
+                        states: {
+                            0: "not enabled",
+                            1: "enabled",
+                        },
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.dis_along_border != null) {
+                await this.extendObject(`${sn}.settings.dis_along_border`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Edge Distance",
+                            de: "Randabstand",
+                            ru: "Расстояние до края",
+                            pt: "distância da borda",
+                            nl: "Randafstand",
+                            fr: "Distance au bord",
+                            it: "Distanza dal bordo",
+                            es: "Distancia al borde",
+                            pl: "Odległość od krawędzi",
+                            uk: "Відстань від краю",
+                            "zh-cn": "边缘距离",
+                        },
+                        type: "number",
+                        role: "value",
+                        write: true,
+                        read: true,
+                        def: 0,
+                        states: {
+                            0: "close",
+                            1: "far",
+                        },
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.first_along_border != null) {
+                await this.extendObject(`${sn}.settings.first_along_border`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Mowing Preference",
+                            de: "Mähpräferenz",
+                            ru: "Предпочтения по стрижке газона",
+                            pt: "Preferência de corte de grama",
+                            nl: "Voorkeur voor maaien",
+                            fr: "Préférence de tonte",
+                            it: "Preferenza di taglio",
+                            es: "Preferencia de corte",
+                            pl: "Preferencje dotyczące koszenia",
+                            uk: "Уподобання щодо скошування",
+                            "zh-cn": "割草偏好",
+                        },
+                        type: "boolean",
+                        role: "switch",
+                        write: true,
+                        read: true,
+                        def: false,
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.follow_border_freq != null) {
+                await this.extendObject(`${sn}.settings.follow_border_freq`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Edge Cutting Frequency",
+                            de: "Kantenschneidfrequenz",
+                            ru: "Частота резки кромок",
+                            pt: "Frequência de corte de borda",
+                            nl: "Snijfrequentie van de kanten",
+                            fr: "Fréquence de coupe des bords",
+                            it: "Frequenza di taglio del bordo",
+                            es: "Frecuencia de corte de filo",
+                            pl: "Częstotliwość cięcia krawędzi",
+                            uk: "Частота різання країв",
+                            "zh-cn": "边缘切削频率",
+                        },
+                        type: "number",
+                        role: "value",
+                        write: true,
+                        read: true,
+                        def: 0,
+                        states: {
+                            0: "everytime",
+                            1: "every second time",
+                            2: "every third time",
+                        },
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.plan_angle != null && data.plan_angle.plan_mode != null) {
+                await this.extendObject(`${sn}.settings.plan_mode`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Cutting Direction",
+                            de: "Schnittrichtung",
+                            ru: "Направление резки",
+                            pt: "Direção de corte",
+                            nl: "Snijrichting",
+                            fr: "Direction de coupe",
+                            it: "Direzione di taglio",
+                            es: "Dirección de corte",
+                            pl: "Kierunek cięcia",
+                            uk: "Напрямок різання",
+                            "zh-cn": "切割方向",
+                        },
+                        type: "number",
+                        role: "value",
+                        write: true,
+                        read: true,
+                        def: 0,
+                        states: {
+                            0: "default",
+                            1: "traceless",
+                            4: "multi-angle",
+                        },
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.mow_efficiency != null && data.mow_efficiency.speed != null) {
+                await this.extendObject(`${sn}.settings.speed`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Mowing Speed",
+                            de: "Mähgeschwindigkeit",
+                            ru: "Скорость кошения",
+                            pt: "Velocidade de corte",
+                            nl: "Maaisnelheid",
+                            fr: "Vitesse de tonte",
+                            it: "Velocità di taglio",
+                            es: "Velocidad de corte",
+                            pl: "Prędkość koszenia",
+                            uk: "Швидкість скошування",
+                            "zh-cn": "割草速度",
+                        },
+                        type: "number",
+                        role: "value",
+                        write: true,
+                        read: true,
+                        def: 2,
+                        states: {
+                            1: "slow",
+                            2: "standard",
+                            3: "fast",
+                        },
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.mow_efficiency != null && data.mow_efficiency.gap != null) {
+                await this.extendObject(`${sn}.settings.speed`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Cutting Spacing",
+                            de: "Schneiden Abstand",
+                            ru: "Расстояние между режущими инструментами",
+                            pt: "Espaçamento de corte",
+                            nl: "Snijafstand",
+                            fr: "Espacement de coupe",
+                            it: "Spazio di taglio",
+                            es: "Espaciado de corte",
+                            pl: "Odstępy między cięciami",
+                            uk: "Інтервал різання",
+                            "zh-cn": "切割间距",
+                        },
+                        type: "number",
+                        role: "value",
+                        write: true,
+                        read: true,
+                        def: 2,
+                        states: {
+                            2: "standard",
+                            3: "wide",
+                        },
+                    },
+                    native: {},
+                });
+            }
+            await this.setSettings(sn, data);
+        }, 5000);
     }
 
     async onSunseekerMap({ sn, kind, payload }) {
@@ -584,6 +902,82 @@ class SunseekerAdapter extends utils.Adapter {
         if (settingsIdx > 0 && parts[settingsIdx + 1]) {
             const sn = parts[settingsIdx - 1];
             const leaf = parts[settingsIdx + 1];
+            if (leaf === "night_work") {
+                if (typeof state.val === "boolean") {
+                    this.sunseeker.setSettings(sn, state.val, "setNightWork", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "follow_border_freq") {
+                if (typeof state.val === "number" && (state.val == 0 || state.val == 1 || state.val == 2)) {
+                    this.sunseeker.setSettings(sn, state.val, "setFollowBorderFreq", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "recharge_mode") {
+                if (typeof state.val === "number" && (state.val == 0 || state.val == 1 || state.val == 2)) {
+                    this.sunseeker.setSettings(sn, state.val, "setRechargeMode", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "recharge_mode") {
+                if (typeof state.val === "number" && (state.val == 0 || state.val == 1 || state.val == 4)) {
+                    this.sunseeker.setSettings(sn, state.val, "setPlanAngle", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "speed") {
+                if (typeof state.val === "number" && (state.val == 1 || state.val == 2 || state.val == 3)) {
+                    const gap = await this.getStateAsync(`${sn}.settings.gap`);
+                    if (gap && gap.val != null && (gap.val == 2 || gap.val == 3)) {
+                        this.sunseeker.setMowEfficiency(sn, gap.val, state.val);
+                        this.setState(id, { val: state.val, ack: true });
+                    }
+                }
+                return;
+            }
+            if (leaf === "gap") {
+                if (typeof state.val === "number" && (state.val == 2 || state.val == 3)) {
+                    const speed = await this.getStateAsync(`${sn}.settings.speed`);
+                    if (speed && speed.val != null && (speed.val == 1 || speed.val == 2 || speed.val == 3)) {
+                        this.sunseeker.setMowEfficiency(sn, state.val, speed.val);
+                        this.setState(id, { val: state.val, ack: true });
+                    }
+                }
+                return;
+            }
+            if (leaf === "work_touch_mode") {
+                if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
+                    this.sunseeker.setSettings(sn, state.val, "setWorkTouchMode", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "auto_ride_edge_map_m") {
+                if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
+                    this.sunseeker.setSettings(sn, state.val, "setAutoRideEdgeMapM", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "first_along_border") {
+                if (typeof state.val === "boolean") {
+                    this.sunseeker.setSettings(sn, state.val, "setFirstAlongBorder", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "dis_along_border") {
+                if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
+                    this.sunseeker.setSettings(sn, state.val, "setDisAlongBorder", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
             if (leaf === "bladeSpeed" || leaf === "bladeHeight") {
                 const key = leaf === "bladeSpeed" ? "speed" : "height";
                 try {
@@ -1182,6 +1576,44 @@ class SunseekerAdapter extends utils.Adapter {
                     },
                     native: {},
                 });
+            }
+        }
+    }
+
+    async setSettings(sn, data) {
+        if (data) {
+            if (data.night_work != null) {
+                await this.setState(`${sn}.settings.night_work`, { val: data.night_work, ack: true });
+            }
+            if (data.recharge_mode != null) {
+                await this.setState(`${sn}.settings.recharge_mode`, { val: data.recharge_mode, ack: true });
+            }
+            if (data.work_touch_mode != null) {
+                await this.setState(`${sn}.settings.work_touch_mode`, { val: data.work_touch_mode, ack: true });
+            }
+            if (data.auto_ride_edge_map_m != null) {
+                await this.setState(`${sn}.settings.auto_ride_edge_map_m`, {
+                    val: data.auto_ride_edge_map_m,
+                    ack: true,
+                });
+            }
+            if (data.dis_along_border != null) {
+                await this.setState(`${sn}.settings.dis_along_border`, { val: data.dis_along_border, ack: true });
+            }
+            if (data.first_along_border != null) {
+                await this.setState(`${sn}.settings.first_along_border`, { val: data.first_along_border, ack: true });
+            }
+            if (data.follow_border_freq != null) {
+                await this.setState(`${sn}.settings.follow_border_freq`, { val: data.follow_border_freq, ack: true });
+            }
+            if (data.plan_angle != null && data.plan_angle.plan_mode != null) {
+                await this.setState(`${sn}.settings.plan_mode`, { val: data.plan_angle.plan_mode, ack: true });
+            }
+            if (data.mow_efficiency != null && data.mow_efficiency.speed != null) {
+                await this.setState(`${sn}.settings.speed`, { val: data.mow_efficiency.speed, ack: true });
+            }
+            if (data.mow_efficiency != null && data.mow_efficiency.gap != null) {
+                await this.setState(`${sn}.settings.gap`, { val: data.mow_efficiency.gap, ack: true });
             }
         }
     }
