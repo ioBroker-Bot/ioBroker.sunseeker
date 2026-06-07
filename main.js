@@ -629,6 +629,32 @@ class SunseekerAdapter extends utils.Adapter {
                     native: {},
                 });
             }
+            if (data && data.energy_saving_mode != null) {
+                await this.extendObject(`${sn}.settings.energy_saving_mode`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Energy saving mode",
+                            de: "Energiesparmodus",
+                            ru: "режим энергосбережения",
+                            pt: "Modo de economia de energia",
+                            nl: "Energiebesparende modus",
+                            fr: "mode d'économie d'énergie",
+                            it: "Modalità di risparmio energetico",
+                            es: "Modo de ahorro de energía",
+                            pl: "Tryb oszczędzania energii",
+                            uk: "Режим енергозбереження",
+                            "zh-cn": "节能模式",
+                        },
+                        type: "boolean",
+                        role: "switch",
+                        write: true,
+                        read: true,
+                        def: false,
+                    },
+                    native: {},
+                });
+            }
             if (data && data.follow_border_freq != null) {
                 await this.extendObject(`${sn}.settings.follow_border_freq`, {
                     type: "state",
@@ -778,7 +804,7 @@ class SunseekerAdapter extends utils.Adapter {
                 });
             }
             if (data && data.mow_efficiency != null && data.mow_efficiency.gap != null) {
-                await this.extendObject(`${sn}.settings.speed`, {
+                await this.extendObject(`${sn}.settings.gap`, {
                     type: "state",
                     common: {
                         name: {
@@ -986,6 +1012,13 @@ class SunseekerAdapter extends utils.Adapter {
             if (leaf === "night_work") {
                 if (typeof state.val === "boolean") {
                     this.sunseeker.setSettings(sn, state.val, "setNightWork", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "energy_saving_mode") {
+                if (typeof state.val === "boolean") {
+                    this.sunseeker.setSettings(sn, state.val, "setEnergySavingMode", leaf);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
@@ -1743,6 +1776,9 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (data.dev_name != null) {
                 await this.setState(`${sn}.settings.dev_name`, { val: data.dev_name, ack: true });
+            }
+            if (data.energy_saving_mode != null) {
+                await this.setState(`${sn}.settings.energy_saving_mode`, { val: data.energy_saving_mode, ack: true });
             }
         }
     }
