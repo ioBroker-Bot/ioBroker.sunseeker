@@ -359,6 +359,52 @@ class SunseekerAdapter extends utils.Adapter {
                 forceIndex: false,
                 states,
             });
+            await this.extendObject(`${sn}.settings.pin_old`, {
+                type: "state",
+                common: {
+                    name: {
+                        en: "Old pin code",
+                        de: "Alter PIN-Code",
+                        ru: "Старый пин-код",
+                        pt: "Código PIN antigo",
+                        nl: "Oude pincode",
+                        fr: "Ancien code postal",
+                        it: "Vecchio codice PIN",
+                        es: "Código PIN antiguo",
+                        pl: "Stary kod PIN",
+                        uk: "Старий поштовий індекс",
+                        "zh-cn": "旧邮政编码",
+                    },
+                    type: "string",
+                    role: "state",
+                    write: true,
+                    read: true,
+                },
+                native: {},
+            });
+            await this.extendObject(`${sn}.settings.pin_new`, {
+                type: "state",
+                common: {
+                    name: {
+                        en: "New pin code/Set the old PIN first",
+                        de: "Neuer PIN-Code / Zuerst den alten PIN-Code festlegen",
+                        ru: "Новый PIN-код/Сначала установите старый PIN-код",
+                        pt: "Novo código PIN/Primeiro, defina o PIN antigo.",
+                        nl: "Nieuwe pincode/Stel eerst de oude pincode in",
+                        fr: "Nouveau code PIN / Définir l'ancien code PIN en premier",
+                        it: "Nuovo codice PIN/Imposta prima il vecchio PIN",
+                        es: "Nuevo código PIN/Establezca primero el PIN anterior",
+                        pl: "Nowy kod PIN/Najpierw ustaw stary kod PIN",
+                        uk: "Новий PIN-код/Спочатку встановіть старий PIN-код",
+                        "zh-cn": "新密码/先设置旧密码",
+                    },
+                    type: "string",
+                    role: "state",
+                    write: true,
+                    read: true,
+                },
+                native: {},
+            });
             await this.ensureWritableSettings(sn, normalized);
         }
     }
@@ -1009,6 +1055,31 @@ class SunseekerAdapter extends utils.Adapter {
         if (settingsIdx > 0 && parts[settingsIdx + 1]) {
             const sn = parts[settingsIdx - 1];
             const leaf = parts[settingsIdx + 1];
+            if (leaf === "pin_old") {
+                if (typeof state.val === "string") {
+                    const numberFormat = /^\d{4}$/;
+                    if (numberFormat.test(state.val)) {
+                        this.setState(id, { val: state.val, ack: true });
+                    }
+                }
+                return;
+            }
+            if (leaf === "pin_new") {
+                if (typeof state.val === "string") {
+                    const numberFormat = /^\d{4}$/;
+                    if (numberFormat.test(state.val)) {
+                        const pin_old = await this.getStateAsync(`${sn}.settings.pin_old`);
+                        if (pin_old && typeof pin_old.val === "string") {
+                            if (numberFormat.test(pin_old.val)) {
+                                this.sunseeker.changePin(sn, pin_old.val, state.val);
+                                this.setState(id, { val: "", ack: true });
+                                this.setState(`${sn}.settings.pin_old`, { val: "", ack: true });
+                            }
+                        }
+                    }
+                }
+                return;
+            }
             if (leaf === "night_work") {
                 if (typeof state.val === "boolean") {
                     this.sunseeker.setSettings(sn, state.val, "setNightWork", leaf);

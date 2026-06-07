@@ -86,6 +86,7 @@ declare class Sunseeker extends EventEmitter {
     parseScheduleDay(value: string): { startSec: number; endSec: number } | null;
     secToHms(sec: number): string;
     setMowEfficiency(sn: string, gap: number, speed: number): Promise<void>;
+    changePin(sn: string, oldpin: string, newpin: string): Promise<void>;
 
     // mqtt.js
     initMqtt(): void;

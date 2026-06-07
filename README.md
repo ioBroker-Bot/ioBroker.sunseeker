@@ -112,6 +112,8 @@ These settings are made writable directly under `<sn>.settings.*`. Writing them 
 | `ai_sensitivity`       | 0 = low<br>1 = high                                            | —    | New API only  |
 | `dev_name`             | API returns an error,<br>but the name is changed               | —    | New API only  |
 | `energy_saving_mode`   | boolean                                                        | —    | New API only  |
+| `pin_old`              | Change Pin Code -> Old Pin                                     | —    | New API only  |
+| `pin_new`              | New Pin (Set the old PIN first)                                | —    | New API only  |
 
 When writing blade values, the adapter posts `{ id: "setDevBlade", key: "blade", method: "set_property", speed|height: <int> }`. After 1.5 s a status refresh is scheduled; MQTT push usually updates the values as well.
 
