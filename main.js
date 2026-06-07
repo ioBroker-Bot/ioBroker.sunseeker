@@ -1025,6 +1025,8 @@ class SunseekerAdapter extends utils.Adapter {
         try {
             if (command === "refresh") {
                 await this.sunseeker.updateDevice(sn);
+            } else if (command === "refresh_property") {
+                await this.sunseeker.fetchInitialProperties();
             } else {
                 await this.sunseeker.sendCommand(sn, command, state.val);
                 this.updateDeviceCommand = this.setTimeout(
@@ -1219,6 +1221,22 @@ class SunseekerAdapter extends utils.Adapter {
                     pl: "Status ponownego ładowania",
                     uk: "Стан поповнення",
                     "zh-cn": "重新加载状态",
+                },
+            ],
+            [
+                "refresh_property",
+                {
+                    en: "Reload Properties",
+                    de: "Eigenschaften neu laden",
+                    ru: "Перезагрузить свойства",
+                    pt: "Recarregar propriedades",
+                    nl: "Eigenschappen opnieuw laden",
+                    fr: "Recharger les propriétés",
+                    it: "Ricarica le proprietà",
+                    es: "Recargar propiedades",
+                    pl: "Załaduj ponownie właściwości",
+                    uk: "Перезавантажити властивості",
+                    "zh-cn": "重新加载属性",
                 },
             ],
         ];

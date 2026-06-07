@@ -86,6 +86,7 @@ Raw payloads (REST and MQTT) are written through `json2iob` directly — no para
 | `stop_task`         | Cancel current task                             |
 | `restart`           | Restart task                                    |
 | `refresh`           | Reload status now                               |
+| `refresh_property`  | Reload properties now                           |
 
 ## Writable settings
 
@@ -182,6 +183,7 @@ V1-specific (`app_wirelessv1_mower/wirelessv1/`): `device-setting`, `device-sett
 ### **WORK IN PROGRESS**
 
 - (Lucky-ESA) Added settings
+- (Lucky-ESA) Added refresh properties button
 
 ### 0.0.2 (2026-05-29)
 
