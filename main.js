@@ -603,6 +603,32 @@ class SunseekerAdapter extends utils.Adapter {
                     native: {},
                 });
             }
+            if (data && data.time_work_repeat != null) {
+                await this.extendObject(`${sn}.settings.time_work_repeat`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Time work to repeat",
+                            de: "Zeitarbeit wiederholen",
+                            ru: "Время для работы, чтобы повторить",
+                            pt: "Tempo de trabalho para repetir",
+                            nl: "Tijd om te herhalen",
+                            fr: "Il faut répéter le travail.",
+                            it: "Tempo di lavoro da ripetere",
+                            es: "El tiempo de trabajo se repite",
+                            pl: "Praca nad czasem do powtórzenia",
+                            uk: "Час роботи для повторення",
+                            "zh-cn": "重复工作的时间",
+                        },
+                        type: "boolean",
+                        role: "switch",
+                        write: true,
+                        read: true,
+                        def: false,
+                    },
+                    native: {},
+                });
+            }
             if (data && data.follow_border_freq != null) {
                 await this.extendObject(`${sn}.settings.follow_border_freq`, {
                     type: "state",
@@ -629,6 +655,61 @@ class SunseekerAdapter extends utils.Adapter {
                             0: "everytime",
                             1: "every second time",
                             2: "every third time",
+                        },
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.dev_name != null) {
+                await this.extendObject(`${sn}.settings.dev_name`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Name",
+                            de: "Name",
+                            ru: "Имя",
+                            pt: "Nome",
+                            nl: "Naam",
+                            fr: "Nom",
+                            it: "Nome",
+                            es: "Nombre",
+                            pl: "Nazwa",
+                            uk: "Ім'я",
+                            "zh-cn": "姓名",
+                        },
+                        type: "string",
+                        role: "state",
+                        write: true,
+                        read: true,
+                    },
+                    native: {},
+                });
+            }
+            if (data && data.ai_sensitivity != null) {
+                await this.extendObject(`${sn}.settings.ai_sensitivity`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "AI sensitivity",
+                            de: "KI-Sensitivität",
+                            ru: "чувствительность ИИ",
+                            pt: "Sensibilidade da IA",
+                            nl: "AI-gevoeligheid",
+                            fr: "sensibilité de l'IA",
+                            it: "sensibilità dell'IA",
+                            es: "Sensibilidad de la IA",
+                            pl: "Wrażliwość AI",
+                            uk: "Чутливість штучного інтелекту",
+                            "zh-cn": "人工智能敏感性",
+                        },
+                        type: "number",
+                        role: "value",
+                        write: true,
+                        read: true,
+                        def: 0,
+                        states: {
+                            0: "low",
+                            1: "high",
                         },
                     },
                     native: {},
@@ -923,9 +1004,16 @@ class SunseekerAdapter extends utils.Adapter {
                 }
                 return;
             }
-            if (leaf === "recharge_mode") {
+            if (leaf === "plan_mode") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1 || state.val == 4)) {
                     this.sunseeker.setSettings(sn, state.val, "setPlanAngle", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "dev_name") {
+                if (typeof state.val === "string" && state.val != "") {
+                    this.sunseeker.setSettings(sn, state.val, "setDevName", leaf);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
@@ -971,7 +1059,21 @@ class SunseekerAdapter extends utils.Adapter {
                 }
                 return;
             }
+            if (leaf === "time_work_repeat") {
+                if (typeof state.val === "boolean") {
+                    this.sunseeker.setSettings(sn, state.val, "setTimeWorkRepeat", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
             if (leaf === "dis_along_border") {
+                if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
+                    this.sunseeker.setSettings(sn, state.val, "setDisAlongBorder", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "ai_sensitivity") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
                     this.sunseeker.setSettings(sn, state.val, "setDisAlongBorder", leaf);
                     this.setState(id, { val: state.val, ack: true });
@@ -1621,6 +1723,12 @@ class SunseekerAdapter extends utils.Adapter {
             if (data.first_along_border != null) {
                 await this.setState(`${sn}.settings.first_along_border`, { val: data.first_along_border, ack: true });
             }
+            if (data.ai_sensitivity != null) {
+                await this.setState(`${sn}.settings.ai_sensitivity`, { val: data.ai_sensitivity, ack: true });
+            }
+            if (data.time_work_repeat != null) {
+                await this.setState(`${sn}.settings.time_work_repeat`, { val: data.time_work_repeat, ack: true });
+            }
             if (data.follow_border_freq != null) {
                 await this.setState(`${sn}.settings.follow_border_freq`, { val: data.follow_border_freq, ack: true });
             }
@@ -1632,6 +1740,9 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (data.mow_efficiency != null && data.mow_efficiency.gap != null) {
                 await this.setState(`${sn}.settings.gap`, { val: data.mow_efficiency.gap, ack: true });
+            }
+            if (data.dev_name != null) {
+                await this.setState(`${sn}.settings.dev_name`, { val: data.dev_name, ack: true });
             }
         }
     }

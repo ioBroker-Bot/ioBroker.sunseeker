@@ -108,6 +108,9 @@ These settings are made writable directly under `<sn>.settings.*`. Writing them 
 | `plan_mode`            | 0 = default<br>1 = traceless<br>4 = multi-angle                | —    | New API only  |
 | `gap`                  | 2 = standard<br>3 = wide                                       | —    | New API only  |
 | `speed`                | 1 = slow<br>2 = standard<br>3 = fast                           | —    | New API only  |
+| `time_work_repeat`     | boolean                                                        | —    | New API only  |
+| `ai_sensitivity`       | 0 = low<br>1 = high                                            | —    | New API only  |
+| `dev_name`             | API returns an error,<br>but the name is changed               | —    | New API only  |
 
 When writing blade values, the adapter posts `{ id: "setDevBlade", key: "blade", method: "set_property", speed|height: <int> }`. After 1.5 s a status refresh is scheduled; MQTT push usually updates the values as well.
 
