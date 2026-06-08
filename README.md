@@ -104,10 +104,10 @@ These settings are made writable directly under `<sn>.settings.*`. Writing them 
 | `auto_ride_edge_map_m` | 0 = not enabled<br>1 = enabled                                 | —    | New API only  |
 | `dis_along_border`     | 0 = close<br>1 = far                                           | —    | New API only  |
 | `first_along_border`   | boolean                                                        | —    | New API only  |
-| `follow_border_freq`   | 0 = everytime<br>1 = every second time<br>2 = every third time | —    | New API only  |
+| `follow_border_freq`   | 1 = everytime<br>2 = every second time<br>3 = every third time | —    | New API only  |
 | `plan_mode`            | 0 = default<br>1 = traceless<br>4 = multi-angle                | —    | New API only  |
-| `gap`                  | 2 = standard<br>3 = wide                                       | —    | New API only  |
-| `speed`                | 1 = slow<br>2 = standard<br>3 = fast                           | —    | New API only  |
+| `gap`                  | 1 = narrow<br>2 = standard<br>3 = wide                         | —    | New API only  |
+| `workSpeed`            | 1 = slow<br>2 = standard<br>3 = fast                           | —    | New API only  |
 | `time_work_repeat`     | boolean                                                        | —    | New API only  |
 | `ai_sensitivity`       | 0 = low<br>1 = high                                            | —    | New API only  |
 | `dev_name`             | API returns an error,<br>but the name is changed               | —    | New API only  |

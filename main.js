@@ -728,9 +728,9 @@ class SunseekerAdapter extends utils.Adapter {
                         read: true,
                         def: 0,
                         states: {
-                            0: "everytime",
-                            1: "every second time",
-                            2: "every third time",
+                            1: "everytime",
+                            2: "every second time",
+                            3: "every third time",
                         },
                     },
                     native: {},
@@ -741,17 +741,17 @@ class SunseekerAdapter extends utils.Adapter {
                     type: "state",
                     common: {
                         name: {
-                            en: "Name",
-                            de: "Name",
-                            ru: "Имя",
-                            pt: "Nome",
-                            nl: "Naam",
-                            fr: "Nom",
-                            it: "Nome",
-                            es: "Nombre",
-                            pl: "Nazwa",
-                            uk: "Ім'я",
-                            "zh-cn": "姓名",
+                            en: "Device name",
+                            de: "Name des Geräts",
+                            ru: "Имя устройства",
+                            pt: "Nome do dispositivo",
+                            nl: "Apparaatnaam",
+                            fr: "Nom du périphérique",
+                            it: "Nome del dispositivo",
+                            es: "Nombre del dispositivo",
+                            pl: "Nazwa urządzenia",
+                            uk: "Назва пристрою",
+                            "zh-cn": "设备名称",
                         },
                         type: "string",
                         role: "state",
@@ -823,7 +823,7 @@ class SunseekerAdapter extends utils.Adapter {
                 });
             }
             if (data && data.mow_efficiency != null && data.mow_efficiency.speed != null) {
-                await this.extendObject(`${sn}.settings.speed`, {
+                await this.extendObject(`${sn}.settings.workSpeed`, {
                     type: "state",
                     common: {
                         name: {
@@ -876,6 +876,7 @@ class SunseekerAdapter extends utils.Adapter {
                         read: true,
                         def: 2,
                         states: {
+                            1: "narrow",
                             2: "standard",
                             3: "wide",
                         },
@@ -1099,7 +1100,7 @@ class SunseekerAdapter extends utils.Adapter {
                 return;
             }
             if (leaf === "follow_border_freq") {
-                if (typeof state.val === "number" && (state.val == 0 || state.val == 1 || state.val == 2)) {
+                if (typeof state.val === "number" && (state.val == 1 || state.val == 2 || state.val == 3)) {
                     this.sunseeker.setSettings(sn, state.val, "setFollowBorderFreq", leaf);
                     this.setState(id, { val: state.val, ack: true });
                 }
@@ -1126,10 +1127,10 @@ class SunseekerAdapter extends utils.Adapter {
                 }
                 return;
             }
-            if (leaf === "speed") {
+            if (leaf === "workSpeed") {
                 if (typeof state.val === "number" && (state.val == 1 || state.val == 2 || state.val == 3)) {
                     const gap = await this.getStateAsync(`${sn}.settings.gap`);
-                    if (gap && gap.val != null && (gap.val == 2 || gap.val == 3)) {
+                    if (gap && gap.val != null && (gap.val == 1 || gap.val == 2 || gap.val == 3)) {
                         this.sunseeker.setMowEfficiency(sn, gap.val, state.val);
                         this.setState(id, { val: state.val, ack: true });
                     }
@@ -1137,8 +1138,8 @@ class SunseekerAdapter extends utils.Adapter {
                 return;
             }
             if (leaf === "gap") {
-                if (typeof state.val === "number" && (state.val == 2 || state.val == 3)) {
-                    const speed = await this.getStateAsync(`${sn}.settings.speed`);
+                if (typeof state.val === "number" && (state.val == 1 || state.val == 2 || state.val == 3)) {
+                    const speed = await this.getStateAsync(`${sn}.settings.workSpeed`);
                     if (speed && speed.val != null && (speed.val == 1 || speed.val == 2 || speed.val == 3)) {
                         this.sunseeker.setMowEfficiency(sn, state.val, speed.val);
                         this.setState(id, { val: state.val, ack: true });
@@ -1752,17 +1753,17 @@ class SunseekerAdapter extends utils.Adapter {
                     type: "state",
                     common: {
                         name: {
-                            en: "Rain delay active",
-                            de: "Regenverzögerung aktiv",
-                            ru: "Задержка из-за дождя активирована",
-                            pt: "Atraso devido à chuva ativo",
-                            nl: "Regenvertraging actief",
-                            fr: "Retard dû à la pluie",
-                            it: "Tempo di sospensione per pioggia attivo",
-                            es: "Retraso por lluvia activo",
-                            pl: "Aktywne opóźnienie deszczu",
-                            uk: "Затримка дощу активна",
-                            "zh-cn": "雨天延误生效",
+                            en: "Pause during rain",
+                            de: "Pause bei Regen",
+                            ru: "Пауза во время дождя",
+                            pt: "Pausa durante a chuva",
+                            nl: "Pauzeer tijdens regen",
+                            fr: "Pause pendant la pluie",
+                            it: "Pausa durante la pioggia",
+                            es: "Pausa durante la lluvia",
+                            pl: "Pauza podczas deszczu",
+                            uk: "Пауза під час дощу",
+                            "zh-cn": "雨中暂停",
                         },
                         type: "boolean",
                         role: "switch",
@@ -1809,6 +1810,9 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     async setSettings(sn, data) {
+        if (data && data.robot_pos) {
+            return;
+        }
         if (data) {
             if (data.night_work != null) {
                 await this.setState(`${sn}.settings.night_work`, { val: data.night_work, ack: true });
@@ -1844,7 +1848,7 @@ class SunseekerAdapter extends utils.Adapter {
                 await this.setState(`${sn}.settings.plan_mode`, { val: data.plan_angle.plan_mode, ack: true });
             }
             if (data.mow_efficiency != null && data.mow_efficiency.speed != null) {
-                await this.setState(`${sn}.settings.speed`, { val: data.mow_efficiency.speed, ack: true });
+                await this.setState(`${sn}.settings.workSpeed`, { val: data.mow_efficiency.speed, ack: true });
             }
             if (data.mow_efficiency != null && data.mow_efficiency.gap != null) {
                 await this.setState(`${sn}.settings.gap`, { val: data.mow_efficiency.gap, ack: true });
@@ -1854,6 +1858,14 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (data.energy_saving_mode != null) {
                 await this.setState(`${sn}.settings.energy_saving_mode`, { val: data.energy_saving_mode, ack: true });
+            }
+            if (data.rain != null) {
+                if (data.rain.rain_flag != null) {
+                    await this.setState(`${sn}.settings.rainFlag`, { val: data.rain.rain_flag, ack: true });
+                }
+                if (data.rain.delay != null) {
+                    await this.setState(`${sn}.settings.rainDelayDuration`, { val: data.rain.delay, ack: true });
+                }
             }
         }
     }
