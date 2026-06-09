@@ -54,7 +54,7 @@ Which API to pick depends on the model:
 
 For each mower (serial `<sn>`) the adapter creates these channels:
 
-- `<sn>.general` — raw device metadata from the device list (account ids, model, serial)
+- `<sn>.general` — raw device metadata from the device list (account ids, model, serial). Updated only when the adapter starts
 - `<sn>.status` — mower status (poll **and** MQTT push write into the same folder)
 - `<sn>.settings` — device settings
 - `<sn>.remote` — command buttons
@@ -110,7 +110,8 @@ These settings are made writable directly under `<sn>.settings.*`. Writing them 
 | `workSpeed`            | 1 = slow<br>2 = standard<br>3 = fast                           | —    | New API only  |
 | `time_work_repeat`     | boolean                                                        | —    | New API only  |
 | `ai_sensitivity`       | 0 = low<br>1 = high                                            | —    | New API only  |
-| `dev_name`             | API returns an error,<br>but the name is changed               | —    | New API only  |
+| `dev_name`             | Change device name                                             | —    | New API only  |
+| `dev_model`            | Change device model name                                       | —    | New API only  |
 | `energy_saving_mode`   | boolean                                                        | —    | New API only  |
 | `pin_old`              | Change Pin Code -> Old Pin                                     | —    | New API only  |
 | `pin_new`              | New Pin (Set the old PIN first)                                | —    | New API only  |

@@ -761,6 +761,31 @@ class SunseekerAdapter extends utils.Adapter {
                     native: {},
                 });
             }
+            if (data && data.dev_model != null) {
+                await this.extendObject(`${sn}.settings.dev_model`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Device model",
+                            de: "Gerätemodell",
+                            ru: "модель устройства",
+                            pt: "Modelo do dispositivo",
+                            nl: "Apparaatmodel",
+                            fr: "Modèle d'appareil",
+                            it: "Modello del dispositivo",
+                            es: "Modelo de dispositivo",
+                            pl: "Model urządzenia",
+                            uk: "Модель пристрою",
+                            "zh-cn": "设备型号",
+                        },
+                        type: "string",
+                        role: "state",
+                        write: true,
+                        read: true,
+                    },
+                    native: {},
+                });
+            }
             if (data && data.ai_sensitivity != null) {
                 await this.extendObject(`${sn}.settings.ai_sensitivity`, {
                     type: "state",
@@ -1122,7 +1147,14 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "dev_name") {
                 if (typeof state.val === "string" && state.val != "") {
-                    this.sunseeker.setSettings(sn, state.val, "setDevName", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setDeviveName", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "dev_model") {
+                if (typeof state.val === "string" && state.val != "") {
+                    this.sunseeker.setSettings(sn, state.val, "setDevModel", leaf);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
@@ -1810,9 +1842,6 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     async setSettings(sn, data) {
-        if (data && data.robot_pos) {
-            return;
-        }
         if (data) {
             if (data.night_work != null) {
                 await this.setState(`${sn}.settings.night_work`, { val: data.night_work, ack: true });
@@ -1855,6 +1884,9 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (data.dev_name != null) {
                 await this.setState(`${sn}.settings.dev_name`, { val: data.dev_name, ack: true });
+            }
+            if (data.dev_model != null) {
+                await this.setState(`${sn}.settings.dev_model`, { val: data.dev_model, ack: true });
             }
             if (data.energy_saving_mode != null) {
                 await this.setState(`${sn}.settings.energy_saving_mode`, { val: data.energy_saving_mode, ack: true });
