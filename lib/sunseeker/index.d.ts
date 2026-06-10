@@ -87,6 +87,8 @@ declare class Sunseeker extends EventEmitter {
     secToHms(sec: number): string;
     setMowEfficiency(sn: string, gap: number, speed: number): Promise<void>;
     changePin(sn: string, oldpin: string, newpin: string): Promise<void>;
+    ota_upgrade(sn: string): Promise<void>;
+    ota_base_upgrade(sn: string): Promise<void>;
 
     // mqtt.js
     initMqtt(): void;
@@ -104,6 +106,9 @@ declare class Sunseeker extends EventEmitter {
     fetchMapJson(sn: string, kind: string, url: string): Promise<any>;
     fetchMapImage(sn: string, kind: string, url: string): Promise<void>;
     renderLivemap(mapData: any, pathData: any, meta?: any): Promise<string | null>;
+
+    // helper.js
+    createSettings(sn: string, data: any, iob: ioBroker.Adapter): Promise<void>;
 }
 
 export = Sunseeker;
