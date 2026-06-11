@@ -18,6 +18,10 @@ interface IobTimers {
     clearInterval: (x: ioBroker.Interval) => void;
 }
 
+interface IobObjects {
+    extendObject: (o: string, d: any) => void;
+}
+
 interface SunseekerOptions {
     region: string;
     apptype: string;
@@ -26,6 +30,7 @@ interface SunseekerOptions {
     refreshAfterMqttMs: number;
     logger: Logger;
     iobTimers: IobTimers;
+    iobObjects: IobObjects;
 }
 
 declare class Sunseeker extends EventEmitter {
@@ -36,6 +41,7 @@ declare class Sunseeker extends EventEmitter {
     options: SunseekerOptions;
     log: Logger;
     iobTimer: IobTimers;
+    iobObject: IobObjects;
 
     session: any;
     devicesRaw: Record<string, any>;
@@ -89,6 +95,9 @@ declare class Sunseeker extends EventEmitter {
     changePin(sn: string, oldpin: string, newpin: string): Promise<void>;
     ota_upgrade(sn: string): Promise<void>;
     ota_base_upgrade(sn: string): Promise<void>;
+    startUpdateCheck(first: boolean): Promise<void>;
+    startUpdateCheckInterval(): Promise<void>;
+    sleep(ms: number): Promise<void>;
 
     // mqtt.js
     initMqtt(): void;
@@ -108,7 +117,8 @@ declare class Sunseeker extends EventEmitter {
     renderLivemap(mapData: any, pathData: any, meta?: any): Promise<string | null>;
 
     // helper.js
-    createSettings(sn: string, data: any, iob: ioBroker.Adapter): Promise<void>;
+    createSettings(sn: string, data: any): Promise<void>;
+    createSettingsFW(sn: string): Promise<void>;
 }
 
 export = Sunseeker;

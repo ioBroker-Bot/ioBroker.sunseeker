@@ -65,6 +65,10 @@ class SunseekerAdapter extends utils.Adapter {
             clearInterval: (/** @type {ioBroker.Interval | undefined} */ x) => this.clearInterval(x),
         };
 
+        const iobObjects = {
+            extendObject: (/** @type {string} */ o, /** @type {any} */ d) => this.extendObject(o, d),
+        };
+
         this.sunseeker = new Sunseeker(cfg.username, cfg.password, {
             region: cfg.region || "EU",
             apptype: cfg.apptype || "New",
@@ -73,6 +77,7 @@ class SunseekerAdapter extends utils.Adapter {
             refreshAfterMqttMs: 1500,
             logger,
             iobTimers,
+            iobObjects,
         });
 
         this.sunseeker.on("devices", payload => this.onSunseekerDevices(payload));
@@ -181,6 +186,7 @@ class SunseekerAdapter extends utils.Adapter {
                 native: {},
             });
             if (this.sunseeker) {
+                await this.sunseeker.createSettingsFW(sn);
                 const meta = this.sunseeker.deviceMeta[sn];
                 if (meta && (meta.modelClass === "S" || d.modelClass === "X")) {
                     await this.extendObject(`${sn}.map`, {
@@ -482,7 +488,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.firstStartTimeout = this.setTimeout(async () => {
             this.firstStartTimeout = null;
             if (data && this.sunseeker) {
-                await this.sunseeker.createSettings(sn, data, this);
+                await this.sunseeker.createSettings(sn, data);
             }
             await this.setSettings(sn, data);
         }, 5000);
@@ -695,6 +701,14 @@ class SunseekerAdapter extends utils.Adapter {
             if (leaf === "firmware_update_start") {
                 if (typeof state.val === "boolean") {
                     this.sunseeker.ota_upgrade(sn);
+                    this.setState(id, { val: false, ack: true });
+                }
+                return;
+            }
+            if (leaf === "firmware_update_check_manuel") {
+                if (typeof state.val === "boolean") {
+                    // FW Check for all devices
+                    this.sunseeker.startUpdateCheck(false);
                     this.setState(id, { val: false, ack: true });
                 }
                 return;
