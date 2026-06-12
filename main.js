@@ -709,7 +709,7 @@ class SunseekerAdapter extends utils.Adapter {
         const snr = parts[mapIdx - 1];
         if (parts[mapIdx + 1] === "livemap_update" && state && typeof state.val === "boolean") {
             this.sunseeker.setLiveMap(snr, state.val);
-            this.setState(id, { val: false, ack: true });
+            this.setState(id, { val: state.val, ack: true });
             return;
         }
         9;
