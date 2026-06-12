@@ -185,32 +185,69 @@ class SunseekerAdapter extends utils.Adapter {
                 common: { name: d.deviceName || sn },
                 native: {},
             });
+            let path = "";
             if (this.sunseeker) {
                 await this.sunseeker.createSettingsFW(sn);
                 const meta = this.sunseeker.deviceMeta[sn];
                 if (meta && (meta.modelClass === "S" || d.modelClass === "X")) {
-                    await this.extendObject(`${sn}.map`, {
-                        type: "channel",
-                        common: {
-                            name: {
-                                en: "Maps",
-                                de: "Karten",
-                                ru: "Карты",
-                                pt: "Mapas",
-                                nl: "Kaarten",
-                                fr: "Cartes",
-                                it: "Mappe",
-                                es: "Mapas",
-                                pl: "Mapy",
-                                uk: "Карти",
-                                "zh-cn": "地图",
+                    path = `${sn}.map`;
+                    if (!this.createObjectDone[path]) {
+                        this.createObjectDone[path] = true;
+                        await this.extendObject(path, {
+                            type: "channel",
+                            common: {
+                                name: {
+                                    en: "Maps",
+                                    de: "Karten",
+                                    ru: "Карты",
+                                    pt: "Mapas",
+                                    nl: "Kaarten",
+                                    fr: "Cartes",
+                                    it: "Mappe",
+                                    es: "Mapas",
+                                    pl: "Mapy",
+                                    uk: "Карти",
+                                    "zh-cn": "地图",
+                                },
                             },
-                        },
-                        native: {},
-                    });
+                            native: {},
+                        });
+                        await this.extendObject(`${sn}.map.livemap_update`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Update live map",
+                                    de: "Live-Karte aktualisieren",
+                                    ru: "Обновить карту в реальном времени",
+                                    pt: "Atualizar mapa ao vivo",
+                                    nl: "Live kaart bijwerken",
+                                    fr: "Mise à jour de la carte en direct",
+                                    it: "Aggiorna la mappa in tempo reale",
+                                    es: "Actualizar mapa en directo",
+                                    pl: "Aktualizuj mapę na żywo",
+                                    uk: "Оновити карту в реальному часі",
+                                    "zh-cn": "实时地图更新",
+                                },
+                                type: "boolean",
+                                role: "switch",
+                                read: true,
+                                write: false,
+                                def: false,
+                            },
+                            native: {},
+                        });
+                    }
+                    const data = await this.getStateAsync(`${sn}.map.livemap_update`);
+                    if (data && typeof data.val === "boolean") {
+                        this.sunseeker.setLiveMap(sn, data.val);
+                    }
                 }
             }
-            await this.delObjectAsync(`${sn}.list`, { recursive: true }).catch(() => {});
+            path = `${sn}.list`;
+            if (!this.createObjectDone[path]) {
+                this.createObjectDone[path] = true;
+                await this.delObjectAsync(path, { recursive: true }).catch(() => {});
+            }
             await this.json2iob.parse(`${sn}.general`, d, {
                 channelName: {
                     en: "Generally",
@@ -231,8 +268,11 @@ class SunseekerAdapter extends utils.Adapter {
                     picUrlDetail: "text.url",
                 },
             });
-            await this.ensureRemoteButtons(sn);
-            await this.ensureScheduleStates(sn);
+            if (!this.createObjectDone["ensureRemoteButtons"] && this.sunseeker) {
+                this.createObjectDone["ensureRemoteButtons"] = true;
+                await this.sunseeker.ensureRemoteButtons(sn);
+                await this.sunseeker.ensureScheduleStates(sn);
+            }
         }
     }
 
@@ -518,84 +558,97 @@ class SunseekerAdapter extends utils.Adapter {
             });
             return;
         }
+        let path = "";
         if (kind === "backup") {
-            await this.extendObject(`${sn}.map.backup`, {
-                type: "state",
-                common: {
-                    name: {
-                        en: "Backup Map (JSON)",
-                        de: "Backup-Karte (JSON)",
-                        ru: "Карта резервного копирования (JSON)",
-                        pt: "Mapa de backup (JSON)",
-                        nl: "Back-upkaart (JSON)",
-                        fr: "Carte de sauvegarde (JSON)",
-                        it: "Mappa di backup (JSON)",
-                        es: "Mapa de respaldo (JSON)",
-                        pl: "Mapa kopii zapasowej (JSON)",
-                        uk: "Резервна карта (JSON)",
-                        "zh-cn": "备份映射（JSON）",
+            path = `${sn}.map.backup`;
+            if (!this.createObjectDone[path]) {
+                this.createObjectDone[path] = true;
+                await this.extendObject(path, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Backup Map (JSON)",
+                            de: "Backup-Karte (JSON)",
+                            ru: "Карта резервного копирования (JSON)",
+                            pt: "Mapa de backup (JSON)",
+                            nl: "Back-upkaart (JSON)",
+                            fr: "Carte de sauvegarde (JSON)",
+                            it: "Mappa di backup (JSON)",
+                            es: "Mapa de respaldo (JSON)",
+                            pl: "Mapa kopii zapasowej (JSON)",
+                            uk: "Резервна карта (JSON)",
+                            "zh-cn": "备份映射（JSON）",
+                        },
+                        type: "string",
+                        role: "json",
+                        read: true,
+                        write: false,
                     },
-                    type: "string",
-                    role: "json",
-                    read: true,
-                    write: false,
-                },
-                native: {},
-            });
+                    native: {},
+                });
+            }
             this.setState(`${sn}.map.backup`, JSON.stringify(payload), true);
             return;
         }
         if (kind === "mapData" || kind === "pathData") {
-            await this.extendObject(`${sn}.map.${kind}`, {
+            path = `${sn}.map.${kind}`;
+            if (!this.createObjectDone[path]) {
+                this.createObjectDone[path] = true;
+                await this.extendObject(path, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: `Maps-${kind} (JSON)`,
+                            de: `Karten-${kind} (JSON)`,
+                            ru: `Maps-${kind} (JSON)`,
+                            pt: `Mapas-${kind} (JSON)`,
+                            nl: `Maps-${kind} (JSON)`,
+                            fr: `Cartes-${kind} (JSON)`,
+                            it: `Mappe-${kind} (JSON)`,
+                            es: `Mapas-${kind} (JSON)`,
+                            pl: `Mapy-${kind} (JSON)`,
+                            uk: `Карти-${kind} (JSON)`,
+                            "zh-cn": `地图-${kind} (JSON)`,
+                        },
+                        type: "string",
+                        role: "json",
+                        read: true,
+                        write: false,
+                    },
+                    native: {},
+                });
+            }
+            this.setState(`${sn}.map.${kind}`, payload, true);
+            return;
+        }
+        // image / wifi / net / texture (data URLs)
+        path = `${sn}.map.${kind}`;
+        if (!this.createObjectDone[path]) {
+            this.createObjectDone[path] = true;
+            await this.extendObject(path, {
                 type: "state",
                 common: {
                     name: {
-                        en: `Maps-${kind} (JSON)`,
-                        de: `Karten-${kind} (JSON)`,
-                        ru: `Maps-${kind} (JSON)`,
-                        pt: `Mapas-${kind} (JSON)`,
-                        nl: `Maps-${kind} (JSON)`,
-                        fr: `Cartes-${kind} (JSON)`,
-                        it: `Mappe-${kind} (JSON)`,
-                        es: `Mapas-${kind} (JSON)`,
-                        pl: `Mapy-${kind} (JSON)`,
-                        uk: `Карти-${kind} (JSON)`,
-                        "zh-cn": `地图-${kind} (JSON)`,
+                        en: `Maps-${kind} (data URL)`,
+                        de: `Maps-${kind} (Daten-URL)`,
+                        ru: `Maps-${kind} (data URL)`,
+                        pt: `Mapas-${kind} (URL de dados)`,
+                        nl: `Maps-${kind} (data-URL)`,
+                        fr: `Cartes-${kind} (URL des données)`,
+                        it: `Mappe-${kind} (URL dei dati)`,
+                        es: `Mapas-${kind} (URL de datos)`,
+                        pl: `Mapy-${kind} (adres URL danych)`,
+                        uk: `Карти-${kind} (URL-адреса даних)`,
+                        "zh-cn": `地图-${kind}（数据 URL)`,
                     },
                     type: "string",
-                    role: "json",
+                    role: "state",
                     read: true,
                     write: false,
                 },
                 native: {},
             });
-            this.setState(`${sn}.map.${kind}`, payload, true);
-            return;
         }
-        // image / wifi / net / texture (data URLs)
-        await this.extendObject(`${sn}.map.${kind}`, {
-            type: "state",
-            common: {
-                name: {
-                    en: `Maps-${kind} (data URL)`,
-                    de: `Maps-${kind} (Daten-URL)`,
-                    ru: `Maps-${kind} (data URL)`,
-                    pt: `Mapas-${kind} (URL de dados)`,
-                    nl: `Maps-${kind} (data-URL)`,
-                    fr: `Cartes-${kind} (URL des données)`,
-                    it: `Mappe-${kind} (URL dei dati)`,
-                    es: `Mapas-${kind} (URL de datos)`,
-                    pl: `Mapy-${kind} (adres URL danych)`,
-                    uk: `Карти-${kind} (URL-адреса даних)`,
-                    "zh-cn": `地图-${kind}（数据 URL)`,
-                },
-                type: "string",
-                role: "state",
-                read: true,
-                write: false,
-            },
-            native: {},
-        });
         this.setState(`${sn}.map.${kind}`, payload, true);
     }
 
@@ -607,29 +660,33 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     async onSunseekerLivemap({ sn, dataUrl }) {
-        await this.extendObject(`${sn}.map.livemap`, {
-            type: "state",
-            common: {
-                name: {
-                    en: "Live Map (rendered PNG data URL)",
-                    de: "Live-Karte (URL der gerenderten PNG-Daten)",
-                    ru: "Карта в реальном времени (URL-адрес визуализированных данных в формате PNG)",
-                    pt: "Mapa ao vivo (URL com dados PNG renderizados)",
-                    nl: "Live kaart (URL van weergegeven PNG-gegevens)",
-                    fr: "Carte interactive (URL des données PNG rendues)",
-                    it: "Mappa interattiva (URL dei dati PNG renderizzati)",
-                    es: "Mapa interactivo (URL de datos PNG renderizados)",
-                    pl: "Mapa na żywo (wyrenderowany adres URL danych PNG)",
-                    uk: "Жива карта (URL-адреса даних PNG-візуалізації)",
-                    "zh-cn": "实时地图（渲染后的PNG数据URL）",
+        const path = `${sn}.map.livemap`;
+        if (!this.createObjectDone[path]) {
+            this.createObjectDone[path] = true;
+            await this.extendObject(path, {
+                type: "state",
+                common: {
+                    name: {
+                        en: "Live Map (rendered PNG data URL)",
+                        de: "Live-Karte (URL der gerenderten PNG-Daten)",
+                        ru: "Карта в реальном времени (URL-адрес визуализированных данных в формате PNG)",
+                        pt: "Mapa ao vivo (URL com dados PNG renderizados)",
+                        nl: "Live kaart (URL van weergegeven PNG-gegevens)",
+                        fr: "Carte interactive (URL des données PNG rendues)",
+                        it: "Mappa interattiva (URL dei dati PNG renderizzati)",
+                        es: "Mapa interactivo (URL de datos PNG renderizados)",
+                        pl: "Mapa na żywo (wyrenderowany adres URL danych PNG)",
+                        uk: "Жива карта (URL-адреса даних PNG-візуалізації)",
+                        "zh-cn": "实时地图（渲染后的PNG数据URL）",
+                    },
+                    type: "string",
+                    role: "state",
+                    read: true,
+                    write: false,
                 },
-                type: "string",
-                role: "state",
-                read: true,
-                write: false,
-            },
-            native: {},
-        });
+                native: {},
+            });
+        }
         this.setState(`${sn}.map.livemap`, dataUrl, true);
     }
 
@@ -648,6 +705,13 @@ class SunseekerAdapter extends utils.Adapter {
             this.setState(id, { val: false, ack: true });
             return;
         }
+        const mapIdx = parts.indexOf("map");
+        const snr = parts[mapIdx - 1];
+        if (parts[mapIdx + 1] === "livemap_update" && state && typeof state.val === "boolean") {
+            this.sunseeker.setLiveMap(snr, state.val);
+            return;
+        }
+        9;
         const scheduleIdx = parts.indexOf("schedule");
         if (scheduleIdx > 0 && parts[scheduleIdx + 1]) {
             const sn = parts[scheduleIdx - 1];
@@ -899,408 +963,6 @@ class SunseekerAdapter extends utils.Adapter {
         const pauseSt = await this.getStateAsync(`${sn}.schedule.pause`);
         plan.pause = !!(pauseSt && pauseSt.val);
         return plan;
-    }
-
-    /**
-     * @param {string} sn
-     */
-    async ensureRemoteButtons(sn) {
-        await this.extendObject(`${sn}.remote`, {
-            type: "channel",
-            common: {
-                name: {
-                    en: "Commands",
-                    de: "Befehle",
-                    ru: "Команды",
-                    pt: "Comandos",
-                    nl: "Commando's",
-                    fr: "Commandes",
-                    it: "Comandi",
-                    es: "Comandos",
-                    pl: "Polecenia",
-                    uk: "Команди",
-                    "zh-cn": "命令",
-                },
-            },
-            native: {},
-        });
-        const buttons = [
-            [
-                "start",
-                {
-                    en: "Mowing start",
-                    de: "Mähen starten",
-                    ru: "Начало кошения",
-                    pt: "Início da poda",
-                    nl: "Maaien begint",
-                    fr: "Début de la tonte",
-                    it: "Inizio falciatura",
-                    es: "Inicio del corte de césped",
-                    pl: "Rozpoczęcie koszenia",
-                    uk: "Початок скошування",
-                    "zh-cn": "割草开始",
-                },
-            ],
-            [
-                "pause",
-                {
-                    en: "Pause",
-                    de: "Pause",
-                    ru: "Пауза",
-                    pt: "Pausa",
-                    nl: "Pauze",
-                    fr: "Pause",
-                    it: "Pausa",
-                    es: "Pausa",
-                    pl: "Pauza",
-                    uk: "Пауза",
-                    "zh-cn": "暂停",
-                },
-            ],
-            [
-                "dock",
-                {
-                    en: "To the Charging Station",
-                    de: "Zur Ladestation",
-                    ru: "К зарядной станции",
-                    pt: "Para a estação de carregamento",
-                    nl: "Naar het laadstation",
-                    fr: "Vers la station de recharge",
-                    it: "Alla stazione di ricarica",
-                    es: "A la estación de carga",
-                    pl: "Do stacji ładowania",
-                    uk: "До зарядної станції",
-                    "zh-cn": "前往充电站",
-                },
-            ],
-            [
-                "stop_find_charger",
-                {
-                    en: "Trip to home cancel",
-                    de: "Heimreise abbrechen",
-                    ru: "Отмена поездки домой",
-                    pt: "Cancelamento da viagem para casa",
-                    nl: "Reis naar huis geannuleerd",
-                    fr: "Annulation du voyage à domicile",
-                    it: "Annulla il viaggio verso casa",
-                    es: "Cancelación del viaje a casa",
-                    pl: "Odwołanie podróży do domu",
-                    uk: "Скасувати поїздку додому",
-                    "zh-cn": "取消回家行程",
-                },
-            ],
-            [
-                "border",
-                {
-                    en: "Edge cut run",
-                    de: "Kantenschnittlauf",
-                    ru: "Краевой срез",
-                    pt: "corte de borda",
-                    nl: "Randafsnijding",
-                    fr: "Course de coupe de bord",
-                    it: "Taglio del bordo",
-                    es: "Corte de borde",
-                    pl: "Cięcie krawędziowe",
-                    uk: "Вирізання краю",
-                    "zh-cn": "边缘切割",
-                },
-            ],
-            [
-                "stop",
-                {
-                    en: "Stop",
-                    de: "Stoppen",
-                    ru: "Останавливаться",
-                    pt: "Parar",
-                    nl: "Stop",
-                    fr: "Arrêt",
-                    it: "Fermare",
-                    es: "Detener",
-                    pl: "Zatrzymywać się",
-                    uk: "СТІЙ",
-                    "zh-cn": "停止",
-                },
-            ],
-            [
-                "stop_task",
-                {
-                    en: "Cancel Task",
-                    de: "Aufgabe abbrechen",
-                    ru: "Отменить задачу",
-                    pt: "Cancelar tarefa",
-                    nl: "Taak annuleren",
-                    fr: "Annuler la tâche",
-                    it: "Annulla attività",
-                    es: "Cancelar tarea",
-                    pl: "Anuluj zadanie",
-                    uk: "Скасувати завдання",
-                    "zh-cn": "取消任务",
-                },
-            ],
-            [
-                "restart",
-                {
-                    en: "Restart Task",
-                    de: "Aufgabe neu starten",
-                    ru: "Перезапустить задачу",
-                    pt: "Reiniciar tarefa",
-                    nl: "Taak opnieuw starten",
-                    fr: "Tâche de redémarrage",
-                    it: "Riavvia l'attività",
-                    es: "Reiniciar tarea",
-                    pl: "Uruchom ponownie zadanie",
-                    uk: "Перезапустити завдання",
-                    "zh-cn": "重启任务",
-                },
-            ],
-            [
-                "refresh",
-                {
-                    en: "Reload Status",
-                    de: "Status neu laden",
-                    ru: "Статус перезагрузки",
-                    pt: "Recarregar status",
-                    nl: "Herlaadstatus",
-                    fr: "État du rechargement",
-                    it: "Stato ricarica",
-                    es: "Estado de recarga",
-                    pl: "Status ponownego ładowania",
-                    uk: "Стан поповнення",
-                    "zh-cn": "重新加载状态",
-                },
-            ],
-            [
-                "refresh_property",
-                {
-                    en: "Reload Properties",
-                    de: "Eigenschaften neu laden",
-                    ru: "Перезагрузить свойства",
-                    pt: "Recarregar propriedades",
-                    nl: "Eigenschappen opnieuw laden",
-                    fr: "Recharger les propriétés",
-                    it: "Ricarica le proprietà",
-                    es: "Recargar propiedades",
-                    pl: "Załaduj ponownie właściwości",
-                    uk: "Перезавантажити властивості",
-                    "zh-cn": "重新加载属性",
-                },
-            ],
-        ];
-        for (const [id, name] of buttons) {
-            await this.extendObject(`${sn}.remote.${id}`, {
-                type: "state",
-                common: {
-                    name: name,
-                    type: "boolean",
-                    role: "button",
-                    read: false,
-                    write: true,
-                    def: false,
-                },
-                native: {},
-            });
-        }
-    }
-
-    /**
-     * @param {string} sn
-     */
-    async ensureScheduleStates(sn) {
-        await this.extendObject(`${sn}.schedule`, {
-            type: "channel",
-            common: {
-                name: {
-                    en: "Schedule Planner",
-                    de: "Terminplaner",
-                    ru: "Планировщик расписаний",
-                    pt: "Planejador de Horários",
-                    nl: "Planningsplanner",
-                    fr: "Planificateur d'horaire",
-                    it: "Pianificatore di programmi",
-                    es: "Planificador de horarios",
-                    pl: "Planer harmonogramu",
-                    uk: "Планувальник розкладу",
-                    "zh-cn": "日程规划器",
-                },
-            },
-            native: {},
-        });
-        const days = [
-            [
-                "monday",
-                {
-                    en: "Monday (HH:MM-HH:MM, empty = off)",
-                    de: "Montag (HH:MM-HH:MM, leer = aus)",
-                    ru: "Понедельник (ЧЧ:ММ-ЧЧ:ММ, пустой = выключен)",
-                    pt: "Segunda-feira (HH:MM-HH:MM, vazio = desligado)",
-                    nl: "Maandag (HH:MM-HH:MM, leeg = uit)",
-                    fr: "Lundi (HH:MM-HH:MM, vide = désactivé)",
-                    it: "Lunedì (HH:MM-HH:MM, vuoto = chiuso)",
-                    es: "Lunes (HH:MM-HH:MM, vacío = apagado)",
-                    pl: "Poniedziałek (GG:MM-GG:MM, puste = wyłączone)",
-                    uk: "Понеділок (ГГ:ХХ-ГГ:ХХ, порожній = вихідний)",
-                    "zh-cn": "星期一（HH:MM-HH:MM，空表示休息）",
-                },
-            ],
-            [
-                "tuesday",
-                {
-                    en: "Tuesday (HH:MM-HH:MM, empty = off)",
-                    de: "Dienstag (HH:MM-HH:MM, leer = aus)",
-                    ru: "Вторник (ЧЧ:ММ-ЧЧ:ММ, пусто = выключено)",
-                    pt: "Terça-feira (HH:MM-HH:MM, vazio = desligado)",
-                    nl: "Dinsdag (HH:MM-HH:MM, leeg = uit)",
-                    fr: "Mardi (HH:MM-HH:MM, vide = désactivé)",
-                    it: "Martedì (HH:MM-HH:MM, vuoto = spento)",
-                    es: "Martes (HH:MM-HH:MM, vacío = apagado)",
-                    pl: "Wtorek (GG:MM-GG:MM, puste = wyłączone)",
-                    uk: "Вівторок (ГГ:ХХ-ГГ:ХХ, порожній = вихідний)",
-                    "zh-cn": "星期二（HH:MM-HH:MM，空表示休息）",
-                },
-            ],
-            [
-                "wednesday",
-                {
-                    en: "Wednesday (HH:MM-HH:MM, empty = off)",
-                    de: "Mittwoch (HH:MM-HH:MM, leer = aus)",
-                    ru: "Среда (ЧЧ:ММ-ЧЧ:ММ, пусто = выключено)",
-                    pt: "Quarta-feira (HH:MM-HH:MM, vazio = fechado)",
-                    nl: "Woensdag (HH:MM-HH:MM, leeg = uit)",
-                    fr: "Mercredi (HH:MM-HH:MM, vide = désactivé)",
-                    it: "Mercoledì (HH:MM-HH:MM, vuoto = spento)",
-                    es: "Miércoles (HH:MM-HH:MM, vacío = apagado)",
-                    pl: "Środa (GG:MM-GG:MM, puste = wyłączone)",
-                    uk: "Середа (ГГ:ХХ-ГГ:ХХ, порожній = вимкнено)",
-                    "zh-cn": "星期三（HH:MM-HH:MM，空表示休息）",
-                },
-            ],
-            [
-                "thursday",
-                {
-                    en: "Thursday (HH:MM-HH:MM, empty = off)",
-                    de: "Donnerstag (HH:MM-HH:MM, leer = aus)",
-                    ru: "Четверг (ЧЧ:ММ-ЧЧ:ММ, пусто = выключено)",
-                    pt: "Quinta-feira (HH:MM-HH:MM, vazio = fechado)",
-                    nl: "Donderdag (HH:MM-HH:MM, leeg = uit)",
-                    fr: "Jeudi (HH:MM-HH:MM, vide = désactivé)",
-                    it: "Giovedì (HH:MM-HH:MM, vuoto = non disponibile)",
-                    es: "Jueves (HH:MM-HH:MM, vacío = apagado)",
-                    pl: "Czwartek (GG:MM-GG:MM, puste = wyłączone)",
-                    uk: "Четвер (ГГ:ХХ-ГГ:ХХ, порожній = вихідний)",
-                    "zh-cn": "星期四（HH:MM-HH:MM，空表示休息）",
-                },
-            ],
-            [
-                "friday",
-                {
-                    en: "Friday (HH:MM-HH:MM, empty = off)",
-                    de: "Freitag (HH:MM-HH:MM, leer = aus)",
-                    ru: "Пятница (ЧЧ:ММ-ЧЧ:ММ, пусто = выключено)",
-                    pt: "Sexta-feira (HH:MM-HH:MM, vazio = fechado)",
-                    nl: "Vrijdag (HH:MM-HH:MM, leeg = uit)",
-                    fr: "Vendredi (HH:MM-HH:MM, vide = désactivé)",
-                    it: "Venerdì (HH:MM-HH:MM, vuoto = non disponibile)",
-                    es: "Viernes (HH:MM-HH:MM, vacío = apagado)",
-                    pl: "Piątek (GG:MM-GG:MM, puste = wyłączone)",
-                    uk: "П'ятниця (ГГ:ХХ-ГГ:ХХ, порожній = вихідний)",
-                    "zh-cn": "星期五（HH:MM-HH:MM，空表示休息）",
-                },
-            ],
-            [
-                "saturday",
-                {
-                    en: "Saturday (HH:MM-HH:MM, empty = off)",
-                    de: "Samstag (HH:MM-HH:MM, leer = aus)",
-                    ru: "Суббота (ЧЧ:ММ-ЧЧ:ММ, пусто = выключено)",
-                    pt: "Sábado (HH:MM-HH:MM, vazio = fechado)",
-                    nl: "Zaterdag (HH:MM-HH:MM, leeg = uit)",
-                    fr: "Samedi (HH:MM-HH:MM, vide = désactivé)",
-                    it: "Sabato (HH:MM-HH:MM, vuoto = chiuso)",
-                    es: "Sábado (HH:MM-HH:MM, vacío = apagado)",
-                    pl: "Sobota (GG:MM-GG:MM, puste = wyłączone)",
-                    uk: "Субота (ГГ:ХХ-ГГ:ХХ, порожній = вихідний)",
-                    "zh-cn": "星期六（HH:MM-HH:MM，空表示休息）",
-                },
-            ],
-            [
-                "sunday",
-                {
-                    en: "Sunday (HH:MM-HH:MM, empty = off)",
-                    de: "Sonntag (HH:MM-HH:MM, leer = aus)",
-                    ru: "Воскресенье (ЧЧ:ММ-ЧЧ:ММ, пусто = выключено)",
-                    pt: "Domingo (HH:MM-HH:MM, vazio = desligado)",
-                    nl: "Zondag (HH:MM-HH:MM, leeg = uit)",
-                    fr: "Dimanche (HH:MM-HH:MM, vide = désactivé)",
-                    it: "Domenica (HH:MM-HH:MM, vuoto = chiuso)",
-                    es: "Domingo (HH:MM-HH:MM, vacío = apagado)",
-                    pl: "Niedziela (GG:MM-GG:MM, puste = wyłączone)",
-                    uk: "Неділя (ГГ:ХХ-ГГ:ХХ, порожній = вихідний)",
-                    "zh-cn": "星期日（HH:MM-HH:MM，空表示休息）",
-                },
-            ],
-        ];
-        for (const [key, label] of days) {
-            await this.extendObject(`${sn}.schedule.${key}`, {
-                type: "state",
-                common: {
-                    name: label,
-                    type: "string",
-                    role: "text",
-                    read: true,
-                    write: true,
-                    def: "",
-                },
-                native: {},
-            });
-        }
-        await this.extendObject(`${sn}.schedule.pause`, {
-            type: "state",
-            common: {
-                name: {
-                    en: "Schedule paused",
-                    de: "Zeitplan pausiert",
-                    ru: "Расписание приостановлено",
-                    pt: "Programação pausada",
-                    nl: "Planning gepauzeerd",
-                    fr: "Programme suspendu",
-                    it: "Programma sospeso",
-                    es: "Programación pausada",
-                    pl: "Harmonogram wstrzymany",
-                    uk: "Розклад призупинено",
-                    "zh-cn": "行程暂停",
-                },
-                type: "boolean",
-                role: "switch",
-                read: true,
-                write: true,
-                def: false,
-            },
-            native: {},
-        });
-        await this.extendObject(`${sn}.schedule.set`, {
-            type: "state",
-            common: {
-                name: {
-                    en: "Send schedule",
-                    de: "Zeitplan senden",
-                    ru: "Отправить расписание",
-                    pt: "Enviar cronograma",
-                    nl: "Schema verzenden",
-                    fr: "Envoyer le planning",
-                    it: "Invia programma",
-                    es: "Enviar horario",
-                    pl: "Wyślij harmonogram",
-                    uk: "Надіслати розклад",
-                    "zh-cn": "发送日程安排",
-                },
-                type: "boolean",
-                role: "button",
-                read: false,
-                write: true,
-                def: false,
-            },
-            native: {},
-        });
     }
 
     /**

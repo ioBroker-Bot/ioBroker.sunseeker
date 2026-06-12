@@ -109,6 +109,7 @@ declare class Sunseeker extends EventEmitter {
     absorbLivemapState(meta: any, statusData: any): void;
     getDeviceProperty(sn: string, body: any): Promise<void>;
     fetchInitialProperties(): Promise<void>;
+    setLiveMap(sn: string, val: boolean): void;
 
     // map.js
     fetchMap(sn: string): Promise<void>;
@@ -119,6 +120,8 @@ declare class Sunseeker extends EventEmitter {
     // helper.js
     createSettings(sn: string, data: any): Promise<void>;
     createSettingsFW(sn: string): Promise<void>;
+    ensureRemoteButtons(sn: string): Promise<void>;
+    ensureScheduleStates(sn: string): Promise<void>;
 }
 
 export = Sunseeker;
