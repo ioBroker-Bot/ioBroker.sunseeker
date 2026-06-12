@@ -74,7 +74,7 @@ class SunseekerAdapter extends utils.Adapter {
             apptype: cfg.apptype || "New",
             language: cfg.language || "de-DE",
             interval: Number(cfg.interval) > 0 ? Number(cfg.interval) : 300,
-            refreshAfterMqttMs: 1500,
+            refreshAfterMqttMs: 60000,
             logger,
             iobTimers,
             iobObjects,
@@ -709,6 +709,7 @@ class SunseekerAdapter extends utils.Adapter {
         const snr = parts[mapIdx - 1];
         if (parts[mapIdx + 1] === "livemap_update" && state && typeof state.val === "boolean") {
             this.sunseeker.setLiveMap(snr, state.val);
+            this.setState(id, { val: false, ack: true });
             return;
         }
         9;

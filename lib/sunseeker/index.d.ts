@@ -116,6 +116,7 @@ declare class Sunseeker extends EventEmitter {
     fetchMapJson(sn: string, kind: string, url: string): Promise<any>;
     fetchMapImage(sn: string, kind: string, url: string): Promise<void>;
     renderLivemap(mapData: any, pathData: any, meta?: any): Promise<string | null>;
+    fetchMapWithMqttData(sn: string): Promise<void>;
 
     // helper.js
     createSettings(sn: string, data: any): Promise<void>;
