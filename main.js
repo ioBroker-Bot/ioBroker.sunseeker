@@ -40,10 +40,39 @@ class SunseekerAdapter extends utils.Adapter {
         this.createObjectDone = {};
         this.firstStart = {};
         this.firstStartTimeout = null;
+        this.restartLimit = {
+            restartCount: 0,
+            restartLast: 0,
+            restartTime: "",
+            day: "01-01",
+        };
     }
 
     async onReady() {
         this.setState("info.connection", false, true);
+
+        await this.createAuth();
+        const reqCount = await this.getStateAsync(`rateLimit.restart`);
+        if (reqCount && reqCount.val != null && typeof reqCount.val === "string" && reqCount.val.startsWith("{")) {
+            const infoCount = JSON.parse(reqCount.val);
+            if (Object.keys(infoCount).length === 4) {
+                this.log.debug(`Use old restartLimit data!`);
+                this.restartLimit = infoCount;
+            }
+        }
+        const diffTime = new Date().getTime() - this.restartLimit.restartLast;
+        if (diffTime > 24 * 60 * 1000 * 60 || this.restartLimit.day != this.getWeek()) {
+            this.restartLimit.restartCount = 0;
+            this.restartLimit.restartLast = new Date().getTime();
+            this.restartLimit.restartTime = new Date().toISOString();
+            this.restartLimit.day = this.getWeek();
+        }
+        if (this.restartLimit.restartCount > 10) {
+            this.log.warn(`The restart limit of 10 per day has been reached.`);
+            return;
+        }
+        ++this.restartLimit.restartCount;
+        await this.setRestartCount();
 
         const cfg = this.config;
         if (!cfg.username || !cfg.password) {
@@ -92,6 +121,8 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("mqttDisconnect", () => this.setState("info.connection", false, true));
         this.sunseeker.on("error", err => this.log.error(err.message || String(err)));
         this.sunseeker.on("own", payload => this.onSunseekerOwn(payload));
+        this.sunseeker.on("mqtt_auth", payload => this.onSunseekerMqttAuth(payload));
+        this.sunseeker.on("session", payload => this.onSunseekerSession(payload));
 
         this.subscribeStates("*");
 
@@ -578,6 +609,10 @@ class SunseekerAdapter extends utils.Adapter {
         });
     }
 
+    /**
+     * @param {string} sn
+     * @param {any} data
+     */
     async addWriteable(sn, data) {
         this.log.debug(`ID: ${sn}`);
         this.firstStartTimeout = this.setTimeout(async () => {
@@ -707,6 +742,9 @@ class SunseekerAdapter extends utils.Adapter {
         this.setState(`${sn}.map.${kind}`, payload, true);
     }
 
+    /**
+     * @param {{ sn: any; update: any; desc: any; fw: any; }} data
+     */
     async onSunseekerFirmware(data) {
         this.log.debug(JSON.stringify(data));
         await this.setState(`${data.sn}.settings.firmware_update_available`, { val: data.update, ack: true });
@@ -720,6 +758,25 @@ class SunseekerAdapter extends utils.Adapter {
     async onSunseekerOwn(data) {
         this.log.debug(`own: ${JSON.stringify(data)}`);
         await this.setState(`${data.sn}.expert.response`, { val: JSON.stringify(data.data), ack: true });
+    }
+
+    /**
+     * @param {any} payload
+     */
+    async onSunseekerMqttAuth(payload) {
+        const obj = Object.assign({}, payload);
+        obj.key = this.encrypt(obj.key);
+        await this.setState(`auth.mqtt_connection`, { val: JSON.stringify(obj), ack: true });
+    }
+
+    /**
+     * @param {any} payload
+     */
+    async onSunseekerSession(payload) {
+        const obj = Object.assign({}, payload);
+        obj.access_token = this.encrypt(obj.access_token);
+        obj.refresh_token = this.encrypt(obj.refresh_token);
+        await this.setState(`auth.session`, { val: JSON.stringify(obj), ack: true });
     }
 
     async onSunseekerLivemap({ sn, dataUrl }) {
@@ -1254,6 +1311,10 @@ class SunseekerAdapter extends utils.Adapter {
         }
     }
 
+    /**
+     * @param {string} sn
+     * @param {any} data
+     */
     async setSettings(sn, data) {
         if (data) {
             if (data.night_work != null) {
@@ -1313,6 +1374,147 @@ class SunseekerAdapter extends utils.Adapter {
                 }
             }
         }
+    }
+
+    getWeek() {
+        const target = new Date();
+        const getDay = target.getDay();
+        const dayNr = (target.getDay() + 6) % 7;
+        target.setDate(target.getDate() - dayNr + 3);
+        const jan4 = new Date(target.getFullYear(), 0, 4);
+        const dayDiff = (target.getTime() - jan4.getTime()) / 86400000;
+        if (new Date(target.getFullYear(), 0, 1).getDay() < 5) {
+            return `${1 + Math.ceil(dayDiff / 7)}-${getDay}`;
+        }
+        return `${Math.ceil(dayDiff / 7)}-${getDay}`;
+    }
+
+    async createAuth() {
+        await this.extendObject(`${this.namespace}.auth`, {
+            type: "channel",
+            common: {
+                name: {
+                    en: "Auth Information",
+                    de: "Authentifizierungsinformationen",
+                    ru: "Информация об аутентификации",
+                    pt: "Informações de autorização",
+                    nl: "Autorisatie-informatie",
+                    fr: "Informations d'autorisation",
+                    it: "Informazioni di autorizzazione",
+                    es: "Información de autorización",
+                    pl: "Informacje o uwierzytelnianiu",
+                    uk: "Інформація для авторизації",
+                    "zh-cn": "授权信息",
+                },
+                desc: "Create by Adapter",
+                icon: "img/auth.png",
+            },
+            native: {},
+        });
+        await this.extendObject(`${this.namespace}.rateLimit`, {
+            type: "channel",
+            common: {
+                name: {
+                    en: "Rate Limit",
+                    de: "Ratenbegrenzung",
+                    ru: "Лимит скорости",
+                    pt: "Limite de taxa",
+                    nl: "Snelheidslimiet",
+                    fr: "Limite de débit",
+                    it: "Limite di tariffa",
+                    es: "Límite de tasa",
+                    pl: "Limit szybkości",
+                    uk: "Ліміт швидкості",
+                    "zh-cn": "速率限制",
+                },
+                desc: "Create by Adapter",
+                icon: "img/rate.png",
+            },
+            native: {},
+        });
+        await this.extendObject(`${this.namespace}.auth.session`, {
+            type: "state",
+            common: {
+                type: "string",
+                role: "json",
+                name: {
+                    en: "Session",
+                    de: "Sitzung",
+                    ru: "Сессия",
+                    pt: "Sessão",
+                    nl: "Sessie",
+                    fr: "Session",
+                    it: "Sessione",
+                    es: "Sesión",
+                    pl: "Sesja",
+                    uk: "Сесія",
+                    "zh-cn": "会议",
+                },
+                desc: "Create by Adapter",
+                read: true,
+                write: false,
+                def: JSON.stringify({}),
+            },
+            native: {},
+        });
+        await this.extendObject(`${this.namespace}.auth.mqtt_connection`, {
+            type: "state",
+            common: {
+                type: "string",
+                role: "json",
+                name: {
+                    en: "Mqtt connection",
+                    de: "MQTT-Verbindung",
+                    ru: "MQTT-соединение",
+                    pt: "Conexão MQTT",
+                    nl: "MQTT-verbinding",
+                    fr: "Connexion MQTT",
+                    it: "Connessione MQTT",
+                    es: "conexión MQTT",
+                    pl: "Połączenie MQTT",
+                    uk: "З'єднання Mqtt",
+                    "zh-cn": "MQTT 连接",
+                },
+                desc: "Create by Adapter",
+                read: true,
+                write: false,
+                def: JSON.stringify({}),
+            },
+            native: {},
+        });
+        await this.extendObject(`${this.namespace}.rateLimit.restart`, {
+            type: "state",
+            common: {
+                type: "string",
+                role: "json",
+                name: {
+                    en: "Restart Limit",
+                    de: "Neustartlimit",
+                    ru: "Ограничение перезапуска",
+                    pt: "Limite de reinicialização",
+                    nl: "Herstartlimiet",
+                    fr: "Limite de redémarrage",
+                    it: "Limite di riavvio",
+                    es: "Límite de reinicio",
+                    pl: "Limit ponownego uruchomienia",
+                    uk: "Ліміт перезапуску",
+                    "zh-cn": "重启限制",
+                },
+                desc: "Create by Adapter",
+                read: true,
+                write: false,
+                def: JSON.stringify({
+                    restartCount: 0,
+                    restartLast: 0,
+                    restartTime: "",
+                    day: "",
+                }),
+            },
+            native: {},
+        });
+    }
+    async setRestartCount() {
+        await this.setState(`rateLimit.restart`, { val: JSON.stringify(this.restartLimit), ack: true });
     }
 }
 
