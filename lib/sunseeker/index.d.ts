@@ -71,6 +71,7 @@ declare class Sunseeker extends EventEmitter {
     encryptRsa(plaintext: string): string;
     randomMqttPassword(): string;
     editMqttPassword(): Promise<void>;
+    ownRequest(sn: string, data: any): Promise<void>;
 
     // devices.js
     loadEventCodes(language: string): void;
@@ -124,6 +125,7 @@ declare class Sunseeker extends EventEmitter {
     createSettingsFW(sn: string): Promise<void>;
     ensureRemoteButtons(sn: string): Promise<void>;
     ensureScheduleStates(sn: string): Promise<void>;
+    ensureOwnRequestStates(sn: string): Promise<void>;
 }
 
 export = Sunseeker;

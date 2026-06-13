@@ -91,6 +91,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("mqttConnect", () => this.setState("info.connection", true, true));
         this.sunseeker.on("mqttDisconnect", () => this.setState("info.connection", false, true));
         this.sunseeker.on("error", err => this.log.error(err.message || String(err)));
+        this.sunseeker.on("own", payload => this.onSunseekerOwn(payload));
 
         this.subscribeStates("*");
 
@@ -210,6 +211,7 @@ class SunseekerAdapter extends utils.Adapter {
                                     uk: "Карти",
                                     "zh-cn": "地图",
                                 },
+                                icon: "img/map.png",
                             },
                             native: {},
                         });
@@ -244,24 +246,20 @@ class SunseekerAdapter extends utils.Adapter {
                     }
                 }
             }
-            path = `${sn}.list`;
-            if (!this.createObjectDone[path]) {
-                this.createObjectDone[path] = true;
-                await this.delObjectAsync(path, { recursive: true }).catch(() => {});
-            }
-            await this.json2iob.parse(`${sn}.general`, d, {
+            path = `${sn}.mower_raw`;
+            await this.json2iob.parse(`${sn}.mower_raw`, d, {
                 channelName: {
-                    en: "Generally",
-                    de: "Allgemein",
-                    ru: "В целом",
-                    pt: "Geralmente",
-                    nl: "Algemeen",
-                    fr: "En général",
-                    it: "Generalmente",
-                    es: "Generalmente",
-                    pl: "Ogólnie",
-                    uk: "Зазвичай",
-                    "zh-cn": "一般来说",
+                    en: "All data from cloud and mqtt",
+                    de: "Alle Daten aus der Cloud und MQTT",
+                    ru: "Все данные поступают из облака и MQTT.",
+                    pt: "Todos os dados da nuvem e do MQTT",
+                    nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
+                    fr: "Toutes les données proviennent du cloud et de MQTT.",
+                    it: "Tutti i dati dal cloud e MQTT",
+                    es: "Todos los datos provienen de la nube y MQTT.",
+                    pl: "Wszystkie dane z chmury i MQTT",
+                    uk: "Всі дані з хмари та mqtt",
+                    "zh-cn": "所有数据均来自云端和 MQTT",
                 },
                 forceIndex: false,
                 roles: {
@@ -273,6 +271,30 @@ class SunseekerAdapter extends utils.Adapter {
                 this.createObjectDone["ensureRemoteButtons"] = true;
                 await this.sunseeker.ensureRemoteButtons(sn);
                 await this.sunseeker.ensureScheduleStates(sn);
+                await this.sunseeker.ensureOwnRequestStates(sn);
+            }
+            if (!this.createObjectDone[path]) {
+                this.createObjectDone[path] = true;
+                await this.extendObject(`${sn}.mower_raw`, {
+                    type: "channel",
+                    common: {
+                        name: {
+                            en: "All data from cloud and mqtt",
+                            de: "Alle Daten aus der Cloud und MQTT",
+                            ru: "Все данные поступают из облака и MQTT.",
+                            pt: "Todos os dados da nuvem e do MQTT",
+                            nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
+                            fr: "Toutes les données proviennent du cloud et de MQTT.",
+                            it: "Tutti i dati dal cloud e MQTT",
+                            es: "Todos los datos provienen de la nube y MQTT.",
+                            pl: "Wszystkie dane z chmury i MQTT",
+                            uk: "Всі дані з хмари та mqtt",
+                            "zh-cn": "所有数据均来自云端和 MQTT",
+                        },
+                        icon: "img/raw.png",
+                    },
+                    native: {},
+                });
             }
         }
     }
@@ -297,6 +319,7 @@ class SunseekerAdapter extends utils.Adapter {
                         uk: "Журнал подій",
                         "zh-cn": "事件日志",
                     },
+                    icon: "img/work.png",
                 },
                 native: {},
             });
@@ -364,19 +387,19 @@ class SunseekerAdapter extends utils.Adapter {
     async onSunseekerStatus({ sn, status, settings }) {
         const states = this.statesForDevice(sn);
         if (status) {
-            await this.json2iob.parse(`${sn}.status`, status, {
+            await this.json2iob.parse(`${sn}.mower_raw`, status, {
                 channelName: {
-                    en: "Status",
-                    de: "Status",
-                    ru: "Статус",
-                    pt: "Status",
-                    nl: "Status",
-                    fr: "Statut",
-                    it: "Stato",
-                    es: "Estado",
-                    pl: "Status",
-                    uk: "Статус",
-                    "zh-cn": "地位",
+                    en: "All data from cloud and mqtt",
+                    de: "Alle Daten aus der Cloud und MQTT",
+                    ru: "Все данные поступают из облака и MQTT.",
+                    pt: "Todos os dados da nuvem e do MQTT",
+                    nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
+                    fr: "Toutes les données proviennent du cloud et de MQTT.",
+                    it: "Tutti i dati dal cloud e MQTT",
+                    es: "Todos los datos provienen de la nube y MQTT.",
+                    pl: "Wszystkie dane z chmury i MQTT",
+                    uk: "Всі дані з хмари та mqtt",
+                    "zh-cn": "所有数据均来自云端和 MQTT",
                 },
                 forceIndex: false,
                 roles: {
@@ -390,19 +413,19 @@ class SunseekerAdapter extends utils.Adapter {
         }
         if (settings) {
             const normalized = this.normalizeSettings(settings);
-            await this.json2iob.parse(`${sn}.settings`, normalized, {
+            await this.json2iob.parse(`${sn}.mower_raw`, normalized, {
                 channelName: {
-                    en: "Settings",
-                    de: "Einstellungen",
-                    ru: "Настройки",
-                    pt: "Configurações",
-                    nl: "Instellingen",
-                    fr: "Paramètres",
-                    it: "Impostazioni",
-                    es: "Ajustes",
-                    pl: "Ustawienia",
-                    uk: "Налаштування",
-                    "zh-cn": "设置",
+                    en: "All data from cloud and mqtt",
+                    de: "Alle Daten aus der Cloud und MQTT",
+                    ru: "Все данные поступают из облака и MQTT.",
+                    pt: "Todos os dados da nuvem e do MQTT",
+                    nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
+                    fr: "Toutes les données proviennent du cloud et de MQTT.",
+                    it: "Tutti i dati dal cloud e MQTT",
+                    es: "Todos los datos provienen de la nube y MQTT.",
+                    pl: "Wszystkie dane z chmury i MQTT",
+                    uk: "Всі дані з хмари та mqtt",
+                    "zh-cn": "所有数据均来自云端和 MQTT",
                 },
                 forceIndex: false,
                 states,
@@ -410,6 +433,26 @@ class SunseekerAdapter extends utils.Adapter {
             const path = `${sn}.settings.pin_old`;
             if (!this.createObjectDone[path]) {
                 this.createObjectDone[path] = true;
+                await this.extendObject(`${sn}.settings`, {
+                    type: "channel",
+                    common: {
+                        name: {
+                            en: "Settings",
+                            de: "Einstellungen",
+                            ru: "Настройки",
+                            pt: "Configurações",
+                            nl: "Instellingen",
+                            fr: "Paramètres",
+                            it: "Impostazioni",
+                            es: "Ajustes",
+                            pl: "Ustawienia",
+                            uk: "Налаштування",
+                            "zh-cn": "设置",
+                        },
+                        icon: "img/properties.png",
+                    },
+                    native: {},
+                });
                 await this.extendObject(path, {
                     type: "state",
                     common: {
@@ -510,19 +553,19 @@ class SunseekerAdapter extends utils.Adapter {
             delete data.time_custom;
             this.cleanUpCalendar(sn, data, 2);
         }
-        this.json2iob.parse(`${sn}.status`, data, {
+        this.json2iob.parse(`${sn}.mower_raw`, data, {
             channelName: {
-                en: "Status",
-                de: "Status",
-                ru: "Статус",
-                pt: "Status",
-                nl: "Status",
-                fr: "Statut",
-                it: "Stato",
-                es: "Estado",
-                pl: "Status",
-                uk: "Статус",
-                "zh-cn": "地位",
+                en: "All data from cloud and mqtt",
+                de: "Alle Daten aus der Cloud und MQTT",
+                ru: "Все данные поступают из облака и MQTT.",
+                pt: "Todos os dados da nuvem e do MQTT",
+                nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
+                fr: "Toutes les données proviennent du cloud et de MQTT.",
+                it: "Tutti i dati dal cloud e MQTT",
+                es: "Todos los datos provienen de la nube y MQTT.",
+                pl: "Wszystkie dane z chmury i MQTT",
+                uk: "Всі дані з хмари та mqtt",
+                "zh-cn": "所有数据均来自云端和 MQTT",
             },
             forceIndex: false,
             roles: {
@@ -671,6 +714,14 @@ class SunseekerAdapter extends utils.Adapter {
         await this.setState(`${data.sn}.settings.firmware_available`, { val: data.fw, ack: true });
     }
 
+    /**
+     * @param {any} data
+     */
+    async onSunseekerOwn(data) {
+        this.log.debug(`own: ${JSON.stringify(data)}`);
+        await this.setState(`${data.sn}.expert.response`, { val: JSON.stringify(data.data), ack: true });
+    }
+
     async onSunseekerLivemap({ sn, dataUrl }) {
         const path = `${sn}.map.livemap`;
         if (!this.createObjectDone[path]) {
@@ -724,7 +775,13 @@ class SunseekerAdapter extends utils.Adapter {
             this.setState(id, { val: state.val, ack: true });
             return;
         }
-        9;
+        const ownIdx = parts.indexOf("expert");
+        const ownSn = parts[ownIdx - 1];
+        if (parts[ownIdx + 1] === "request" && state && typeof state.val === "string" && state.val.startsWith("{")) {
+            this.sunseeker.ownRequest(ownSn, state.val);
+            this.setState(id, { val: state.val, ack: true });
+            return;
+        }
         const scheduleIdx = parts.indexOf("schedule");
         if (scheduleIdx > 0 && parts[scheduleIdx + 1]) {
             const sn = parts[scheduleIdx - 1];
