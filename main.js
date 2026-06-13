@@ -231,7 +231,7 @@ class SunseekerAdapter extends utils.Adapter {
                                 type: "boolean",
                                 role: "switch",
                                 read: true,
-                                write: false,
+                                write: true,
                                 def: false,
                             },
                             native: {},
