@@ -84,6 +84,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("records", payload => this.onSunseekerRecords(payload));
         this.sunseeker.on("status", payload => this.onSunseekerStatus(payload));
         this.sunseeker.on("mqtt", payload => this.onSunseekerMqtt(payload));
+        this.sunseeker.on("setMqtt", payload => this.onSunseekerSetMqtt(payload));
         this.sunseeker.on("map", payload => this.onSunseekerMap(payload));
         this.sunseeker.on("livemap", payload => this.onSunseekerLivemap(payload));
         this.sunseeker.on("firmware", payload => this.onSunseekerFirmware(payload));
@@ -483,9 +484,31 @@ class SunseekerAdapter extends utils.Adapter {
         return out;
     }
 
-    onSunseekerMqtt({ sn, data, id }) {
+    onSunseekerSetMqtt({ sn, data, id }) {
+        if (!this.firstStart[sn]) {
+            this.log.debug(`ID: ${id}`);
+            if (id === "getDevAllProperty") {
+                this.firstStart[sn] = true;
+                this.addWriteable(sn, data);
+            } else {
+                this.setSettings(sn, data);
+            }
+        } else {
+            this.setSettings(sn, data);
+        }
+    }
+
+    onSunseekerMqtt({ sn, data }) {
         if (!data) {
             return;
+        }
+        if (data.time && typeof data.time === "object" && data.time !== null) {
+            delete data.time;
+            this.cleanUpCalendar(sn, data, 1);
+        }
+        if (data.time_custom && typeof data.time_custom === "object" && data.time_custom !== null) {
+            delete data.time_custom;
+            this.cleanUpCalendar(sn, data, 2);
         }
         this.json2iob.parse(`${sn}.status`, data, {
             channelName: {
@@ -510,17 +533,6 @@ class SunseekerAdapter extends utils.Adapter {
             },
             states: this.statesForDevice(sn),
         });
-        if (!this.firstStart[sn]) {
-            this.log.debug(`ID: ${id}`);
-            if (id === "getDevAllProperty") {
-                this.firstStart[sn] = true;
-                this.addWriteable(sn, data);
-            } else {
-                this.setSettings(sn, data);
-            }
-        } else {
-            this.setSettings(sn, data);
-        }
     }
 
     async addWriteable(sn, data) {
@@ -717,18 +729,14 @@ class SunseekerAdapter extends utils.Adapter {
         if (scheduleIdx > 0 && parts[scheduleIdx + 1]) {
             const sn = parts[scheduleIdx - 1];
             const leaf = parts[scheduleIdx + 1];
+            if (leaf === "loadSchedule") {
+                this.sunseeker.fetchAllProperties(sn);
+                this.setState(id, { val: false, ack: true });
+                return;
+            }
             if (leaf === "set") {
-                try {
-                    const plan = await this.collectSchedulePlan(sn);
-                    await this.sunseeker.setSchedule(sn, plan);
-                    this.updateDeviceSet = this.setTimeout(
-                        () => this.sunseeker?.updateDevice(sn).catch(() => {}),
-                        1500,
-                    );
-                    this.setState(id, { val: false, ack: true });
-                } catch (err) {
-                    this.log.error(`Schedule for ${sn} failed: ${err.message}`);
-                }
+                this.collectSchedulePlan(sn);
+                this.setState(id, { val: false, ack: true });
                 return;
             }
             this.setState(id, { val: state.val, ack: true });
@@ -953,17 +961,99 @@ class SunseekerAdapter extends utils.Adapter {
 
     /**
      * @param {string} sn
+     * @param {any} data
+     * @param {number} plan
+     */
+    async cleanUpCalendar(sn, data, plan) {
+        const dayPeriod = {
+            1: "monday",
+            2: "tuesday",
+            3: "wednesday",
+            4: "thursday",
+            5: "friday",
+            6: "saturday",
+            0: "sunday",
+        };
+        const schedule = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 0: false };
+        const schedule_empty = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 0: false };
+        const schedule_empty2 = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 0: false };
+        const mower_schedule = plan == 1 ? data.time : data.time_custom;
+        for (const d of mower_schedule) {
+            const day = d.period[0];
+            const mower_day_name = dayPeriod[day];
+            const mower_time = this.getTimeString(d.start, d.end);
+            let path = `${sn}.schedule.${mower_day_name}`;
+            this.log.info(day.toString());
+            if (!schedule[day]) {
+                schedule[day] = true;
+                schedule_empty[day] = true;
+            } else {
+                path = `${sn}.schedule.${mower_day_name}_2`;
+                schedule_empty2[day] = true;
+            }
+            await this.setState(path, { val: mower_time, ack: true });
+        }
+        if (typeof data.pause === "boolean") {
+            await this.setState(`${sn}.schedule.pause}`, { val: data.pause, ack: true });
+        }
+        for (const d in schedule_empty) {
+            if (!schedule_empty[d]) {
+                await this.setState(`${sn}.schedule.${dayPeriod[d]}`, { val: "", ack: true });
+            }
+        }
+        if (this.sunseeker) {
+            const meta = this.sunseeker.deviceMeta[sn];
+            if (meta && (meta.modelClass === "S" || meta.modelClass === "X")) {
+                for (const d in schedule_empty2) {
+                    if (!schedule_empty2[d]) {
+                        await this.setState(`${sn}.schedule.${dayPeriod[d]}_2`, { val: "", ack: true });
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * @param {number} start
+     * @param {number} end
+     * @returns {string} hh:mm-hh:mm
+     */
+    getTimeString(start, end) {
+        const utcStart = new Date(start * 1000);
+        const start_time = `${`0${utcStart.getUTCHours()}`.slice(-2)}:${`0${utcStart.getUTCMinutes()}`.slice(-2)}`;
+        const utcEnd = new Date(end * 1000);
+        const end_time = `${`0${utcEnd.getUTCHours()}`.slice(-2)}:${`0${utcEnd.getUTCMinutes()}`.slice(-2)}`;
+        return `${start_time}-${end_time}`;
+    }
+    /**
+     * @param {string} sn
      */
     async collectSchedulePlan(sn) {
+        if (!this.sunseeker) {
+            return;
+        }
+        const meta = this.sunseeker.deviceMeta[sn];
         const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
         const plan = {};
-        for (const day of days) {
-            const st = await this.getStateAsync(`${sn}.schedule.${day}`);
-            plan[day] = st && st.val ? String(st.val) : "";
+        const plan2 = {};
+        try {
+            for (const day of days) {
+                const st = await this.getStateAsync(`${sn}.schedule.${day}`);
+                plan[day] = st && st.val && st.val != "" ? String(st.val) : "";
+                if (meta && (meta.modelClass === "S" || meta.modelClass === "X")) {
+                    const st2 = await this.getStateAsync(`${sn}.schedule.${day}_2`);
+                    plan2[day] = st2 && st2.val && st2.val != "" ? String(st2.val) : "";
+                }
+            }
+            const pauseSt = await this.getStateAsync(`${sn}.schedule.pause`);
+            plan.pause = !!(pauseSt && pauseSt.val);
+            this.log.debug(`collectSchedulePlan 1: ${JSON.stringify(plan)}`);
+            this.log.debug(`collectSchedulePlan 2: ${JSON.stringify(plan2)}`);
+            await this.sunseeker.setSchedule(sn, plan, plan2);
+            this.updateDeviceSet = this.setTimeout(() => this.sunseeker?.updateDevice(sn).catch(() => {}), 1500);
+        } catch (err) {
+            this.log.error(`Schedule for ${sn} failed: ${err.message}`);
         }
-        const pauseSt = await this.getStateAsync(`${sn}.schedule.pause`);
-        plan.pause = !!(pauseSt && pauseSt.val);
-        return plan;
     }
 
     /**

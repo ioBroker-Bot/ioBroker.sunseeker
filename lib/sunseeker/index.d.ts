@@ -88,7 +88,7 @@ declare class Sunseeker extends EventEmitter {
     setBlade(sn: string, key: "speed" | "height", value: number): Promise<void>;
     setSettings(sn: string, value: string | number | boolean | null, id: string, key: string): Promise<void>;
     setRain(sn: string, flag: boolean, durationMin: number): Promise<void>;
-    setSchedule(sn: string, plan: Record<string, any>): Promise<void>;
+    setSchedule(sn: string, plan: Record<string, any>, plan2: Record<string, any>): Promise<void>;
     parseScheduleDay(value: string): { startSec: number; endSec: number } | null;
     secToHms(sec: number): string;
     setMowEfficiency(sn: string, gap: number, speed: number): Promise<void>;
@@ -110,6 +110,7 @@ declare class Sunseeker extends EventEmitter {
     getDeviceProperty(sn: string, body: any): Promise<void>;
     fetchInitialProperties(): Promise<void>;
     setLiveMap(sn: string, val: boolean): void;
+    fetchAllProperties(sn: string): Promise<void>;
 
     // map.js
     fetchMap(sn: string): Promise<void>;
