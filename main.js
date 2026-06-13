@@ -1079,6 +1079,7 @@ class SunseekerAdapter extends utils.Adapter {
      * @param {number} plan
      */
     async cleanUpCalendar(sn, data, plan) {
+        this.log.debug(`cleanUpCalendar: ${plan} - ${JSON.stringify(data)}`);
         const dayPeriod = {
             1: "monday",
             2: "tuesday",
@@ -1092,23 +1093,25 @@ class SunseekerAdapter extends utils.Adapter {
         const schedule_empty = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 0: false };
         const schedule_empty2 = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 0: false };
         const mower_schedule = plan == 1 ? data.time : data.time_custom;
-        for (const d of mower_schedule) {
-            const day = d.period[0];
-            const mower_day_name = dayPeriod[day];
-            const mower_time = this.getTimeString(d.start, d.end);
-            let path = `${sn}.schedule.${mower_day_name}`;
-            this.log.info(day.toString());
-            if (!schedule[day]) {
-                schedule[day] = true;
-                schedule_empty[day] = true;
-            } else {
-                path = `${sn}.schedule.${mower_day_name}_2`;
-                schedule_empty2[day] = true;
+        if (typeof mower_schedule === "object" && mower_schedule !== null) {
+            for (const d of mower_schedule) {
+                const day = d.period[0];
+                const mower_day_name = dayPeriod[day];
+                const mower_time = this.getTimeString(d.start, d.end);
+                let path = `${sn}.schedule.${mower_day_name}`;
+                this.log.info(day.toString());
+                if (!schedule[day]) {
+                    schedule[day] = true;
+                    schedule_empty[day] = true;
+                } else {
+                    path = `${sn}.schedule.${mower_day_name}_2`;
+                    schedule_empty2[day] = true;
+                }
+                await this.setState(path, { val: mower_time, ack: true });
             }
-            await this.setState(path, { val: mower_time, ack: true });
         }
         if (typeof data.pause === "boolean") {
-            await this.setState(`${sn}.schedule.pause}`, { val: data.pause, ack: true });
+            await this.setState(`${sn}.schedule.pause`, { val: data.pause, ack: true });
         }
         for (const d in schedule_empty) {
             if (!schedule_empty[d]) {
