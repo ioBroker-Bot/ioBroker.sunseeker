@@ -293,7 +293,7 @@ class SunseekerAdapter extends utils.Adapter {
                     uk: "Всі дані з хмари та mqtt",
                     "zh-cn": "所有数据均来自云端和 MQTT",
                 },
-                forceIndex: false,
+                forceIndex: true,
                 roles: {
                     picUrl: "text.url",
                     picUrlDetail: "text.url",
@@ -435,7 +435,7 @@ class SunseekerAdapter extends utils.Adapter {
                     uk: "Всі дані з хмари та mqtt",
                     "zh-cn": "所有数据均来自云端和 MQTT",
                 },
-                forceIndex: false,
+                forceIndex: true,
                 roles: {
                     lat: "value.gps.latitude",
                     lng: "value.gps.longitude",
@@ -463,7 +463,7 @@ class SunseekerAdapter extends utils.Adapter {
                     uk: "Всі дані з хмари та mqtt",
                     "zh-cn": "所有数据均来自云端和 MQTT",
                 },
-                forceIndex: false,
+                forceIndex: true,
                 states,
             });
             const path = `${sn}.settings.pin_old`;
@@ -604,7 +604,7 @@ class SunseekerAdapter extends utils.Adapter {
                 uk: "Всі дані з хмари та mqtt",
                 "zh-cn": "所有数据均来自云端和 MQTT",
             },
-            forceIndex: false,
+            forceIndex: true,
             roles: {
                 lat: "value.gps.latitude",
                 lng: "value.gps.longitude",
@@ -613,6 +613,46 @@ class SunseekerAdapter extends utils.Adapter {
             },
             states: this.statesForDevice(sn),
         });
+        const path = `${sn}.settings.plan_angle`;
+        if (!this.createObjectDone[path]) {
+            this.createObjectDone[path] = true;
+            if (cleanup.plan_angle && cleanup.plan_angle.multi_zigzag_angles != null) {
+                const states = [];
+                states.push(0);
+                if (Object.keys(cleanup.plan_angle.multi_zigzag_angles).length > 0) {
+                    for (const angle of cleanup.plan_angle.multi_zigzag_angles) {
+                        if (angle.active) {
+                            states.push(angle.angle);
+                        }
+                    }
+                    this.extendObject(`${sn}.settings.plan_angle`, {
+                        type: "state",
+                        common: {
+                            name: {
+                                en: "Multi zigzag angles",
+                                de: "Mehrere Zickzackwinkel",
+                                ru: "Много зигзагообразных углов",
+                                pt: "Ângulos em ziguezague múltiplos",
+                                nl: "Meerdere zigzaghoeken",
+                                fr: "Angles en zigzag multiples",
+                                it: "Angoli a zigzag multipli",
+                                es: "Ángulos en zigzag múltiples",
+                                pl: "Wielokątne kąty zygzakowate",
+                                uk: "Багатокутні зигзаги",
+                                "zh-cn": "多锯齿角",
+                            },
+                            type: "number",
+                            role: "level",
+                            write: true,
+                            read: true,
+                            def: 0,
+                            states: states,
+                        },
+                        native: {},
+                    });
+                }
+            }
+        }
     }
 
     /**
@@ -647,7 +687,7 @@ class SunseekerAdapter extends utils.Adapter {
                     uk: "Карта",
                     "zh-cn": "地图",
                 },
-                forceIndex: false,
+                forceIndex: true,
                 roles: {
                     mapPathFileUrl: "text.url",
                     realPathFileUlr: "text.url",
@@ -937,7 +977,16 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "plan_mode") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1 || state.val == 4)) {
-                    this.sunseeker.setSettings(sn, state.val, "setPlanAngle", leaf);
+                    const angle = await this.getStateAsync(`${sn}.settings.plan_angle`);
+                    if (angle && typeof angle.val === "number") {
+                        this.sunseeker.setPlanMode(sn, state.val, angle.val);
+                        this.setState(id, { val: state.val, ack: true });
+                    }
+                }
+                return;
+            }
+            if (leaf === "plan_angle") {
+                if (typeof state.val === "number") {
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
@@ -1404,11 +1453,13 @@ class SunseekerAdapter extends utils.Adapter {
                     await this.setState(`${sn}.settings.rainDelayDuration`, { val: data.rain.delay, ack: true });
                 }
             }
-            if (data.bladeHeight != null) {
-                await this.setState(`${sn}.settings.bladeHeight`, { val: data.bladeHeight, ack: true });
+            if (data.bladeHeight != null || (data.blade && data.blade.height != null)) {
+                const val = data.bladeHeight != null ? data.bladeHeight : data.blade.height;
+                await this.setState(`${sn}.settings.bladeHeight`, { val: val, ack: true });
             }
-            if (data.bladeSpeed != null) {
-                await this.setState(`${sn}.settings.bladeSpeed`, { val: data.bladeSpeed, ack: true });
+            if (data.bladeSpeed != null || (data.blade && data.blade.speed != null)) {
+                const val = data.bladeSpeed != null ? data.bladeSpeed : data.blade.speed;
+                await this.setState(`${sn}.settings.bladeSpeed`, { val: val, ack: true });
             }
         }
     }

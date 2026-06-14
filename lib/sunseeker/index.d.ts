@@ -99,6 +99,7 @@ declare class Sunseeker extends EventEmitter {
     startUpdateCheck(first: boolean): Promise<void>;
     startUpdateCheckInterval(): Promise<void>;
     sleep(ms: number): Promise<void>;
+    setPlanMode(sn: string, mode: number, angle: number): Promise<void>;
 
     // mqtt.js
     initMqtt(): void;
