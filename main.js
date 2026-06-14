@@ -278,7 +278,8 @@ class SunseekerAdapter extends utils.Adapter {
                 }
             }
             path = `${sn}.mower_raw`;
-            await this.json2iob.parse(`${sn}.mower_raw`, d, {
+            const cleanup = this.removeNull(d);
+            await this.json2iob.parse(`${sn}.mower_raw`, cleanup, {
                 channelName: {
                     en: "All data from cloud and mqtt",
                     de: "Alle Daten aus der Cloud und MQTT",
@@ -418,7 +419,9 @@ class SunseekerAdapter extends utils.Adapter {
     async onSunseekerStatus({ sn, status, settings }) {
         const states = this.statesForDevice(sn);
         if (status) {
-            await this.json2iob.parse(`${sn}.mower_raw`, status, {
+            const cleanup = this.removeNull(status);
+            await this.setSettings(sn, cleanup);
+            await this.json2iob.parse(`${sn}.mower_raw`, cleanup, {
                 channelName: {
                     en: "All data from cloud and mqtt",
                     de: "Alle Daten aus der Cloud und MQTT",
@@ -444,7 +447,9 @@ class SunseekerAdapter extends utils.Adapter {
         }
         if (settings) {
             const normalized = this.normalizeSettings(settings);
-            await this.json2iob.parse(`${sn}.mower_raw`, normalized, {
+            const cleanup = this.removeNull(normalized);
+            await this.setSettings(sn, cleanup);
+            await this.json2iob.parse(`${sn}.mower_raw`, cleanup, {
                 channelName: {
                     en: "All data from cloud and mqtt",
                     de: "Alle Daten aus der Cloud und MQTT",
@@ -584,7 +589,8 @@ class SunseekerAdapter extends utils.Adapter {
             delete data.time_custom;
             this.cleanUpCalendar(sn, data, 2);
         }
-        this.json2iob.parse(`${sn}.mower_raw`, data, {
+        const cleanup = this.removeNull(data);
+        this.json2iob.parse(`${sn}.mower_raw`, cleanup, {
             channelName: {
                 en: "All data from cloud and mqtt",
                 de: "Alle Daten aus der Cloud und MQTT",
@@ -626,7 +632,8 @@ class SunseekerAdapter extends utils.Adapter {
 
     async onSunseekerMap({ sn, kind, payload }) {
         if (kind === "info") {
-            await this.json2iob.parse(`${sn}.map.info`, payload, {
+            const cleanup = this.removeNull(payload);
+            await this.json2iob.parse(`${sn}.map.info`, cleanup, {
                 channelName: {
                     en: "Map",
                     de: "Karte",
@@ -1174,6 +1181,27 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     /**
+     * @param {any} obj
+     */
+    removeNull(obj) {
+        if (typeof obj.firmwareVersion === "number") {
+            delete obj.firmwareVersion;
+        }
+        if (typeof obj.rainDelayDuration === "string") {
+            obj.rainDelayDuration = parseInt(obj.rainDelayDuration);
+        }
+        if (typeof obj.workStatusCode === "number") {
+            obj.workStatusCode = obj.workStatusCode.toString();
+        }
+        return JSON.parse(JSON.stringify(obj), (key, value) => {
+            if (value === null) {
+                return undefined;
+            }
+            return value;
+        });
+    }
+
+    /**
      * @param {string} sn
      * @param {Record<string, any>} settingsData
      */
@@ -1375,6 +1403,12 @@ class SunseekerAdapter extends utils.Adapter {
                 if (data.rain.delay != null) {
                     await this.setState(`${sn}.settings.rainDelayDuration`, { val: data.rain.delay, ack: true });
                 }
+            }
+            if (data.bladeHeight != null) {
+                await this.setState(`${sn}.settings.bladeHeight`, { val: data.bladeHeight, ack: true });
+            }
+            if (data.bladeSpeed != null) {
+                await this.setState(`${sn}.settings.bladeSpeed`, { val: data.bladeSpeed, ack: true });
             }
         }
     }
