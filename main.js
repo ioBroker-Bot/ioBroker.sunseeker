@@ -123,6 +123,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("own", payload => this.onSunseekerOwn(payload));
         this.sunseeker.on("mqtt_auth", payload => this.onSunseekerMqttAuth(payload));
         this.sunseeker.on("session", payload => this.onSunseekerSession(payload));
+        this.sunseeker.on("mode", payload => this.onSunseekerScheduleMode(payload));
 
         this.subscribeStates("*");
 
@@ -575,6 +576,11 @@ class SunseekerAdapter extends utils.Adapter {
         } else {
             this.setSettings(sn, data);
         }
+        if (id === "getDevAllProperty") {
+            if (this.sunseeker) {
+                this.sunseeker.setScheduleInfo(sn, data);
+            }
+        }
     }
 
     onSunseekerMqtt({ sn, data }) {
@@ -582,12 +588,20 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         if (data.time && typeof data.time === "object" && data.time !== null) {
+            const time_schedule = Object.assign({}, data);
+            this.cleanUpCalendar(sn, time_schedule, 1);
             delete data.time;
-            this.cleanUpCalendar(sn, data, 1);
         }
         if (data.time_custom && typeof data.time_custom === "object" && data.time_custom !== null) {
-            delete data.time_custom;
-            this.cleanUpCalendar(sn, data, 2);
+            if (data.time_custom.time && typeof data.time_custom.time === "object" && data.time_custom.time !== null) {
+                const time_schedule2 = Object.assign({}, data);
+                this.cleanUpCalendar(sn, time_schedule2.time_custom, 1);
+                delete data.time;
+            } else {
+                const time_schedule_custom = Object.assign({}, data);
+                this.cleanUpCalendar(sn, time_schedule_custom, 2);
+                delete data.time_custom;
+            }
         }
         const cleanup = this.removeNull(data);
         this.json2iob.parse(`${sn}.mower_raw`, cleanup, {
@@ -660,7 +674,6 @@ class SunseekerAdapter extends utils.Adapter {
      * @param {any} data
      */
     async addWriteable(sn, data) {
-        this.log.debug(`ID: ${sn}`);
         this.firstStartTimeout = this.setTimeout(async () => {
             this.firstStartTimeout = null;
             if (data && this.sunseeker) {
@@ -808,6 +821,13 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     /**
+     * @param {{ sn: string; mode: number; }} data
+     */
+    async onSunseekerScheduleMode(data) {
+        await this.setState(`${data.sn}.schedule.schedule_mode`, { val: data.mode, ack: true });
+    }
+
+    /**
      * @param {any} payload
      */
     async onSunseekerMqttAuth(payload) {
@@ -895,9 +915,25 @@ class SunseekerAdapter extends utils.Adapter {
                 this.setState(id, { val: false, ack: true });
                 return;
             }
+            if (leaf === "schedule_mode") {
+                if (this.sunseeker && state.val != null && typeof state.val === "number") {
+                    if (state.val == 0 || state.val == 1 || state.val == 2) {
+                        this.sunseeker.setScheduleMode(sn, state.val);
+                        this.setState(id, { val: false, ack: true });
+                    }
+                }
+                return;
+            }
             if (leaf === "set") {
                 this.collectSchedulePlan(sn);
                 this.setState(id, { val: false, ack: true });
+                return;
+            }
+            if (leaf === "schedule_time_work_repeat") {
+                if (typeof state.val === "boolean") {
+                    this.sunseeker.setSettings(sn, state.val, "setTimeWorkRepeat", leaf);
+                    this.setState(id, { val: state.val, ack: true });
+                }
                 return;
             }
             this.setState(id, { val: state.val, ack: true });
@@ -1046,13 +1082,6 @@ class SunseekerAdapter extends utils.Adapter {
                 }
                 return;
             }
-            if (leaf === "time_work_repeat") {
-                if (typeof state.val === "boolean") {
-                    this.sunseeker.setSettings(sn, state.val, "setTimeWorkRepeat", leaf);
-                    this.setState(id, { val: state.val, ack: true });
-                }
-                return;
-            }
             if (leaf === "dis_along_border") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
                     this.sunseeker.setSettings(sn, state.val, "setDisAlongBorder", leaf);
@@ -1150,12 +1179,14 @@ class SunseekerAdapter extends utils.Adapter {
         const schedule_empty2 = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 0: false };
         const mower_schedule = plan == 1 ? data.time : data.time_custom;
         if (typeof mower_schedule === "object" && mower_schedule !== null) {
+            if (!Array.isArray(mower_schedule)) {
+                return;
+            }
             for (const d of mower_schedule) {
                 const day = d.period[0];
                 const mower_day_name = dayPeriod[day];
                 const mower_time = this.getTimeString(d.start, d.end);
                 let path = `${sn}.schedule.${mower_day_name}`;
-                this.log.info(day.toString());
                 if (!schedule[day]) {
                     schedule[day] = true;
                     schedule_empty[day] = true;
@@ -1421,8 +1452,14 @@ class SunseekerAdapter extends utils.Adapter {
             if (data.ai_sensitivity != null) {
                 await this.setState(`${sn}.settings.ai_sensitivity`, { val: data.ai_sensitivity, ack: true });
             }
+            if (data.time_zone != null) {
+                await this.setState(`${sn}.schedule.schedule_time_zone`, { val: data.time_zone, ack: true });
+            }
             if (data.time_work_repeat != null) {
-                await this.setState(`${sn}.settings.time_work_repeat`, { val: data.time_work_repeat, ack: true });
+                await this.setState(`${sn}.schedule.schedule_time_work_repeat`, {
+                    val: data.time_work_repeat,
+                    ack: true,
+                });
             }
             if (data.follow_border_freq != null) {
                 await this.setState(`${sn}.settings.follow_border_freq`, { val: data.follow_border_freq, ack: true });

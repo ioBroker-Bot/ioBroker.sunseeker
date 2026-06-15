@@ -79,6 +79,8 @@ declare class Sunseeker extends EventEmitter {
     mqttBroker(): { host: string; port: number };
     getDevices(): Promise<any[]>;
     getEvents(sn: string, current: number, size: number): Promise<void>;
+    setScheduleInfo(sn: string, data: any): void;
+    setScheduleMode(sn: string, mode: number): void;
 
     // polling-and-settings.js
     startPolling(): void;
@@ -110,6 +112,7 @@ declare class Sunseeker extends EventEmitter {
     onMqttMessage(topic: string, payload: Buffer): void;
     absorbLivemapState(meta: any, statusData: any): void;
     getDeviceProperty(sn: string, body: any): Promise<void>;
+    setDeviceProperty(sn: string, body: any): Promise<void>;
     fetchInitialProperties(): Promise<void>;
     setLiveMap(sn: string, val: boolean): void;
     fetchAllProperties(sn: string): Promise<void>;
