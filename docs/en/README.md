@@ -43,6 +43,7 @@ For each mower (serial `<sn>`) the adapter creates these channels:
 - `<sn>.events` — Mowing event log as json and manuel update button
 - `<sn>.map` — map data (only for S/X models, when available):
     - `info` — raw response of `/wireless_map/wireless_device/get` (sizes, magnification, `mapModifyTime`, …)
+    - `zonen` — Zonen information
     - `image` — heatmap (PNG data URL; often empty if the cloud has not rendered one)
     - `wifi` — WiFi signal heatmap (PNG data URL)
     - `net` — 4G signal heatmap (PNG data URL)
@@ -90,7 +91,6 @@ These settings are made writable directly under `<sn>.settings.*`. Writing them 
 | `plan_mode`                    | 0 = default<br>1 = traceless<br>4 = multi-angle                | —    | New API only  |
 | `gap`                          | 1 = narrow<br>2 = standard<br>3 = wide                         | —    | New API only  |
 | `workSpeed`                    | 1 = slow<br>2 = standard<br>3 = fast                           | —    | New API only  |
-| `time_work_repeat`             | boolean                                                        | —    | New API only  |
 | `ai_sensitivity`               | 0 = low<br>1 = high                                            | —    | New API only  |
 | `dev_name`                     | Change device name                                             | —    | New API only  |
 | `dev_model`                    | Change device model name                                       | —    | New API only  |
@@ -115,11 +115,15 @@ Writing `rainFlag` or `rainDelayDuration` always sends both values to the cloud 
 
 A simple weekly plan with one window per day. The states are writable but the cloud is only updated when `set` is triggered.
 
-| State               | Type    | Format                                                               |
-| ------------------- | ------- | -------------------------------------------------------------------- |
-| `monday` … `sunday` | string  | `"HH:MM-HH:MM"` for the active window, empty string disables the day |
-| `pause`             | boolean | Pause the schedule without clearing the windows                      |
-| `set`               | button  | Sends the current values to the cloud                                |
+| State                       | Type                                                           | Format                                                               |
+| --------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `monday` … `sunday`         | string                                                         | `"HH:MM-HH:MM"` for the active window, empty string disables the day |
+| `pause`                     | boolean                                                        | Pause the schedule without clearing the windows                      |
+| `set`                       | button                                                         | Sends the current values to the cloud                                |
+| `loadSchedule`              | button                                                         | Load current schedule                                                |
+| `schedule_time_work_repeat` | button                                                         | Mowing cycle with schedule                                           |
+| `schedule_mode`             | 0 = no schedule</br>1 = recomended</br>1 = custom (X & S only) | Sends the current values to the cloud                                |
+| `schedule_time_zone`        | number                                                         | Timezone                                                             |
 
 The dispatched payload depends on the model:
 

@@ -247,6 +247,26 @@ class SunseekerAdapter extends utils.Adapter {
                             },
                             native: {},
                         });
+                        await this.extendObject(`${path}.zonen`, {
+                            type: "channel",
+                            common: {
+                                name: {
+                                    en: "Zonen",
+                                    de: "Zonen",
+                                    ru: "Зонен",
+                                    pt: "Zona",
+                                    nl: "Zones",
+                                    fr: "Zonen",
+                                    it: "Zonan",
+                                    es: "Zona",
+                                    pl: "Strefy",
+                                    uk: "Зонен",
+                                    "zh-cn": "区域",
+                                },
+                                icon: "img/map.png",
+                            },
+                            native: {},
+                        });
                         await this.extendObject(`${sn}.map.livemap_update`, {
                             type: "state",
                             common: {
@@ -688,17 +708,17 @@ class SunseekerAdapter extends utils.Adapter {
             const cleanup = this.removeNull(payload);
             await this.json2iob.parse(`${sn}.map.info`, cleanup, {
                 channelName: {
-                    en: "Map",
-                    de: "Karte",
-                    ru: "Карта",
-                    pt: "Mapa",
-                    nl: "Kaart",
-                    fr: "Carte",
-                    it: "Mappa",
-                    es: "Mapa",
-                    pl: "Mapa",
-                    uk: "Карта",
-                    "zh-cn": "地图",
+                    en: "Map info",
+                    de: "Karteninformationen",
+                    ru: "Информация о карте",
+                    pt: "Informações do mapa",
+                    nl: "Kaartinformatie",
+                    fr: "Informations cartographiques",
+                    it: "Informazioni sulla mappa",
+                    es: "Información del mapa",
+                    pl: "Informacje o mapie",
+                    uk: "Інформація про карту",
+                    "zh-cn": "地图信息",
                 },
                 forceIndex: true,
                 roles: {
@@ -741,6 +761,9 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         if (kind === "mapData" || kind === "pathData") {
+            if (kind === "mapData") {
+                this.checkZone(sn, payload);
+            }
             path = `${sn}.map.${kind}`;
             if (!this.createObjectDone[path]) {
                 this.createObjectDone[path] = true;
@@ -875,6 +898,53 @@ class SunseekerAdapter extends utils.Adapter {
             });
         }
         this.setState(`${sn}.map.livemap`, dataUrl, true);
+    }
+
+    /**
+     * @param {string} sn
+     * @param {any} data
+     */
+    async checkZone(sn, data) {
+        if (data && typeof data === "string" && data.startsWith("{")) {
+            try {
+                const map_info = JSON.parse(data);
+                if (map_info && map_info.region_work) {
+                    if (!Array.isArray(map_info.region_work)) {
+                        return;
+                    }
+                    await this.json2iob.parse(`${sn}.map.zonen`, map_info.region_work, {
+                        forceIndex: true,
+                    });
+                    const zone = Object.keys(map_info.region_work).length;
+                    const obj = await this.getChannelsAsync();
+                    const zone_obj = obj.filter(
+                        z =>
+                            z._id == `${this.namespace}.${sn}.map.zonen.01` ||
+                            z._id == `${this.namespace}.${sn}.map.zonen.02` ||
+                            z._id == `${this.namespace}.${sn}.map.zonen.03` ||
+                            z._id == `${this.namespace}.${sn}.map.zonen.04`,
+                    );
+                    const zonen = Object.keys(zone_obj).length;
+                    if (zonen > zone) {
+                        let count = zonen;
+                        let save = 0;
+                        for (let a = zone; a <= zonen - 1; a++) {
+                            this.log.info(`delete zone: ${this.namespace}.${sn}.map.zonen.0${count}`);
+                            await this.delObjectAsync(`${this.namespace}.${sn}.map.zonen.0${count}`, {
+                                recursive: true,
+                            });
+                            --count;
+                            ++save;
+                            if (save > 10) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                this.log.error(`checkZone: ${e}`);
+            }
+        }
     }
 
     /**
