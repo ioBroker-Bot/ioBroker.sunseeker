@@ -51,7 +51,6 @@ class SunseekerAdapter extends utils.Adapter {
     async onReady() {
         this.setState("info.connection", false, true);
 
-        await this.createAuth();
         const reqCount = await this.getStateAsync(`rateLimit.restart`);
         if (reqCount && reqCount.val != null && typeof reqCount.val === "string" && reqCount.val.startsWith("{")) {
             const infoCount = JSON.parse(reqCount.val);
@@ -80,34 +79,15 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
 
-        const logger = {
-            info: (/** @type {string} */ m) => this.log.info(m),
-            warn: (/** @type {string} */ m) => this.log.warn(m),
-            error: (/** @type {string} */ m) => this.log.error(m),
-            debug: (/** @type {string} */ m) => this.log.debug(m),
-        };
-
-        const iobTimers = {
-            setTimeout: (/** @type {any} */ c, /** @type {number} */ t) => this.setTimeout(c, t),
-            clearTimeout: (/** @type {ioBroker.Timeout | undefined} */ x) => this.clearTimeout(x),
-            setInterval: (/** @type {any} */ c, /** @type {number} */ t) => this.setInterval(c, t),
-            clearInterval: (/** @type {ioBroker.Interval | undefined} */ x) => this.clearInterval(x),
-        };
-
-        const iobObjects = {
-            extendObject: (/** @type {string} */ o, /** @type {any} */ d) => this.extendObject(o, d),
-        };
-
-        this.sunseeker = new Sunseeker(cfg.username, cfg.password, {
+        this.sunseeker = new Sunseeker(cfg.username, cfg.password, this, {
             region: cfg.region || "EU",
             apptype: cfg.apptype || "New",
             language: cfg.language || "de-DE",
             interval: Number(cfg.interval) > 0 ? Number(cfg.interval) : 300,
             refreshAfterMqttMs: 60000,
-            logger,
-            iobTimers,
-            iobObjects,
         });
+
+        await this.createAuth();
 
         this.sunseeker.on("devices", payload => this.onSunseekerDevices(payload));
         this.sunseeker.on("records", payload => this.onSunseekerRecords(payload));
@@ -212,85 +192,98 @@ class SunseekerAdapter extends utils.Adapter {
         if (!Array.isArray(devices)) {
             return;
         }
+        let common;
         for (const d of devices) {
             const sn = d.deviceSn;
-            await this.extendObject(sn, {
-                type: "device",
-                common: { name: d.deviceName || sn },
-                native: {},
-            });
             let path = "";
             if (this.sunseeker) {
+                common = {
+                    name: d.deviceName || sn,
+                    icon: "img/schedule.png",
+                };
+                await this.sunseeker.createDataPoint(`${this.namespace}.${sn}`, common, "device", null, null, null);
                 await this.sunseeker.createSettingsFW(sn);
                 const meta = this.sunseeker.deviceMeta[sn];
                 if (meta && (meta.modelClass === "S" || d.modelClass === "X")) {
                     path = `${sn}.map`;
                     if (!this.createObjectDone[path]) {
                         this.createObjectDone[path] = true;
-                        await this.extendObject(path, {
-                            type: "channel",
-                            common: {
-                                name: {
-                                    en: "Maps",
-                                    de: "Karten",
-                                    ru: "Карты",
-                                    pt: "Mapas",
-                                    nl: "Kaarten",
-                                    fr: "Cartes",
-                                    it: "Mappe",
-                                    es: "Mapas",
-                                    pl: "Mapy",
-                                    uk: "Карти",
-                                    "zh-cn": "地图",
-                                },
-                                icon: "img/map.png",
+                        common = {
+                            name: {
+                                en: "Maps",
+                                de: "Karten",
+                                ru: "Карты",
+                                pt: "Mapas",
+                                nl: "Kaarten",
+                                fr: "Cartes",
+                                it: "Mappe",
+                                es: "Mapas",
+                                pl: "Mapy",
+                                uk: "Карти",
+                                "zh-cn": "地图",
                             },
-                            native: {},
-                        });
-                        await this.extendObject(`${path}.zonen`, {
-                            type: "channel",
-                            common: {
-                                name: {
-                                    en: "Zonen",
-                                    de: "Zonen",
-                                    ru: "Зонен",
-                                    pt: "Zona",
-                                    nl: "Zones",
-                                    fr: "Zonen",
-                                    it: "Zonan",
-                                    es: "Zona",
-                                    pl: "Strefy",
-                                    uk: "Зонен",
-                                    "zh-cn": "区域",
-                                },
-                                icon: "img/map.png",
+                            icon: "img/map.png",
+                        };
+                        await this.sunseeker.createDataPoint(
+                            `${this.namespace}.${path}`,
+                            common,
+                            "channel",
+                            null,
+                            null,
+                            null,
+                        );
+                        common = {
+                            name: {
+                                en: "Zonen",
+                                de: "Zonen",
+                                ru: "Зонен",
+                                pt: "Zona",
+                                nl: "Zones",
+                                fr: "Zonen",
+                                it: "Zonan",
+                                es: "Zona",
+                                pl: "Strefy",
+                                uk: "Зонен",
+                                "zh-cn": "区域",
                             },
-                            native: {},
-                        });
-                        await this.extendObject(`${sn}.map.livemap_update`, {
-                            type: "state",
-                            common: {
-                                name: {
-                                    en: "Update live map",
-                                    de: "Live-Karte aktualisieren",
-                                    ru: "Обновить карту в реальном времени",
-                                    pt: "Atualizar mapa ao vivo",
-                                    nl: "Live kaart bijwerken",
-                                    fr: "Mise à jour de la carte en direct",
-                                    it: "Aggiorna la mappa in tempo reale",
-                                    es: "Actualizar mapa en directo",
-                                    pl: "Aktualizuj mapę na żywo",
-                                    uk: "Оновити карту в реальному часі",
-                                    "zh-cn": "实时地图更新",
-                                },
-                                type: "boolean",
-                                role: "switch",
-                                read: true,
-                                write: true,
-                                def: false,
+                            icon: "img/map.png",
+                        };
+                        await this.sunseeker.createDataPoint(
+                            `${this.namespace}.${path}.zonen`,
+                            common,
+                            "channel",
+                            null,
+                            null,
+                            null,
+                        );
+                        common = {
+                            name: {
+                                en: "Update live map",
+                                de: "Live-Karte aktualisieren",
+                                ru: "Обновить карту в реальном времени",
+                                pt: "Atualizar mapa ao vivo",
+                                nl: "Live kaart bijwerken",
+                                fr: "Mise à jour de la carte en direct",
+                                it: "Aggiorna la mappa in tempo reale",
+                                es: "Actualizar mapa en directo",
+                                pl: "Aktualizuj mapę na żywo",
+                                uk: "Оновити карту в реальному часі",
+                                "zh-cn": "实时地图更新",
                             },
-                            native: {},
-                        });
+                            type: "boolean",
+                            role: "switch",
+                            read: true,
+                            write: true,
+                            def: false,
+                        };
+                        await this.sunseeker.createDataPoint(
+                            `${this.namespace}.${sn}.map.livemap_update`,
+                            common,
+                            "state",
+                            null,
+                            null,
+                            null,
+                        );
                     }
                     const data = await this.getStateAsync(`${sn}.map.livemap_update`);
                     if (data && typeof data.val === "boolean") {
@@ -326,112 +319,108 @@ class SunseekerAdapter extends utils.Adapter {
                 await this.sunseeker.ensureScheduleStates(sn);
                 await this.sunseeker.ensureOwnRequestStates(sn);
             }
-            if (!this.createObjectDone[path]) {
+            if (!this.createObjectDone[path] && this.sunseeker) {
                 this.createObjectDone[path] = true;
-                await this.extendObject(`${sn}.mower_raw`, {
-                    type: "channel",
-                    common: {
-                        name: {
-                            en: "All data from cloud and mqtt",
-                            de: "Alle Daten aus der Cloud und MQTT",
-                            ru: "Все данные поступают из облака и MQTT.",
-                            pt: "Todos os dados da nuvem e do MQTT",
-                            nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
-                            fr: "Toutes les données proviennent du cloud et de MQTT.",
-                            it: "Tutti i dati dal cloud e MQTT",
-                            es: "Todos los datos provienen de la nube y MQTT.",
-                            pl: "Wszystkie dane z chmury i MQTT",
-                            uk: "Всі дані з хмари та mqtt",
-                            "zh-cn": "所有数据均来自云端和 MQTT",
-                        },
-                        icon: "img/raw.png",
+                common = {
+                    name: {
+                        en: "All data from cloud and mqtt",
+                        de: "Alle Daten aus der Cloud und MQTT",
+                        ru: "Все данные поступают из облака и MQTT.",
+                        pt: "Todos os dados da nuvem e do MQTT",
+                        nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
+                        fr: "Toutes les données proviennent du cloud et de MQTT.",
+                        it: "Tutti i dati dal cloud e MQTT",
+                        es: "Todos los datos provienen de la nube y MQTT.",
+                        pl: "Wszystkie dane z chmury i MQTT",
+                        uk: "Всі дані з хмари та mqtt",
+                        "zh-cn": "所有数据均来自云端和 MQTT",
                     },
-                    native: {},
-                });
+                    icon: "img/raw.png",
+                };
+                await this.sunseeker.createDataPoint(
+                    `${this.namespace}.${sn}.mower_raw`,
+                    common,
+                    "channel",
+                    null,
+                    null,
+                    null,
+                );
             }
         }
     }
 
     async onSunseekerRecords({ sn, records }) {
+        let common;
         let path = `${sn}.events`;
-        if (!this.createObjectDone[path]) {
+        if (!this.createObjectDone[path] && this.sunseeker) {
             this.createObjectDone[path] = true;
-            await this.extendObject(path, {
-                type: "channel",
-                common: {
-                    name: {
-                        en: "Event log",
-                        de: "Ereignisprotokoll",
-                        ru: "Журнал событий",
-                        pt: "Registro de eventos",
-                        nl: "Gebeurtenislogboek",
-                        fr: "Journal des événements",
-                        it: "Registro eventi",
-                        es: "Registro de eventos",
-                        pl: "Dziennik zdarzeń",
-                        uk: "Журнал подій",
-                        "zh-cn": "事件日志",
-                    },
-                    icon: "img/work.png",
+            common = {
+                name: {
+                    en: "Event log",
+                    de: "Ereignisprotokoll",
+                    ru: "Журнал событий",
+                    pt: "Registro de eventos",
+                    nl: "Gebeurtenislogboek",
+                    fr: "Journal des événements",
+                    it: "Registro eventi",
+                    es: "Registro de eventos",
+                    pl: "Dziennik zdarzeń",
+                    uk: "Журнал подій",
+                    "zh-cn": "事件日志",
                 },
-                native: {},
-            });
+                icon: "img/work.png",
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "channel", null, null, null);
         }
         path = `${sn}.events.eventUpdate`;
-        if (!this.createObjectDone[path]) {
+        if (!this.createObjectDone[path] && this.sunseeker) {
             this.createObjectDone[path] = true;
-            await this.extendObject(path, {
-                type: "state",
-                common: {
-                    name: {
-                        en: "Manuel update",
-                        de: "Manuelle Aktualisierung",
-                        ru: "Обновление руководства",
-                        pt: "Atualização do Manuel",
-                        nl: "Handmatige update",
-                        fr: "Mise à jour du manuel",
-                        it: "Aggiornamento manuale",
-                        es: "Actualización de manual",
-                        pl: "Aktualizacja instrukcji",
-                        uk: "Оновлення Мануеля",
-                        "zh-cn": "手动更新",
-                    },
-                    type: "boolean",
-                    role: "button",
-                    write: true,
-                    read: false,
-                    def: false,
+            common = {
+                name: {
+                    en: "Manuel update",
+                    de: "Manuelle Aktualisierung",
+                    ru: "Обновление руководства",
+                    pt: "Atualização do Manuel",
+                    nl: "Handmatige update",
+                    fr: "Mise à jour du manuel",
+                    it: "Aggiornamento manuale",
+                    es: "Actualización de manual",
+                    pl: "Aktualizacja instrukcji",
+                    uk: "Оновлення Мануеля",
+                    "zh-cn": "手动更新",
                 },
-                native: {},
-            });
+                type: "boolean",
+                role: "button",
+                write: true,
+                read: false,
+                def: false,
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
         }
         path = `${sn}.events.events`;
-        if (!this.createObjectDone[path]) {
+        if (!this.createObjectDone[path] && this.sunseeker) {
             this.createObjectDone[path] = true;
-            await this.extendObject(path, {
-                type: "state",
-                common: {
-                    name: {
-                        en: "Event log as JSON",
-                        de: "Ereignisprotokoll als JSON",
-                        ru: "Журнал событий в формате JSON",
-                        pt: "Registro de eventos em formato JSON",
-                        nl: "Gebeurtenislogboek als JSON",
-                        fr: "Journal des événements au format JSON",
-                        it: "Registro eventi in formato JSON",
-                        es: "Registro de eventos como JSON",
-                        pl: "Dziennik zdarzeń jako JSON",
-                        uk: "Журнал подій у форматі JSON",
-                        "zh-cn": "事件日志（JSON格式）",
-                    },
-                    type: "string",
-                    role: "json",
-                    write: false,
-                    read: true,
-                    def: JSON.stringify({}),
+            common = {
+                name: {
+                    en: "Event log as JSON",
+                    de: "Ereignisprotokoll als JSON",
+                    ru: "Журнал событий в формате JSON",
+                    pt: "Registro de eventos em formato JSON",
+                    nl: "Gebeurtenislogboek als JSON",
+                    fr: "Journal des événements au format JSON",
+                    it: "Registro eventi in formato JSON",
+                    es: "Registro de eventos como JSON",
+                    pl: "Dziennik zdarzeń jako JSON",
+                    uk: "Журнал подій у форматі JSON",
+                    "zh-cn": "事件日志（JSON格式）",
                 },
-                native: {},
-            });
+                type: "string",
+                role: "json",
+                write: false,
+                read: true,
+                def: JSON.stringify({}),
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
         }
         await this.setState(path, { val: JSON.stringify(records), ack: true });
         //ToDo Interval for update
@@ -469,7 +458,6 @@ class SunseekerAdapter extends utils.Adapter {
         if (settings) {
             const normalized = this.normalizeSettings(settings);
             const cleanup = this.removeNull(normalized);
-            await this.setSettings(sn, cleanup);
             await this.json2iob.parse(`${sn}.mower_raw`, cleanup, {
                 channelName: {
                     en: "All data from cloud and mqtt",
@@ -488,76 +476,83 @@ class SunseekerAdapter extends utils.Adapter {
                 states,
             });
             const path = `${sn}.settings.pin_old`;
-            if (!this.createObjectDone[path]) {
+            let common;
+            if (!this.createObjectDone[path] && this.sunseeker) {
                 this.createObjectDone[path] = true;
-                await this.extendObject(`${sn}.settings`, {
-                    type: "channel",
-                    common: {
-                        name: {
-                            en: "Settings",
-                            de: "Einstellungen",
-                            ru: "Настройки",
-                            pt: "Configurações",
-                            nl: "Instellingen",
-                            fr: "Paramètres",
-                            it: "Impostazioni",
-                            es: "Ajustes",
-                            pl: "Ustawienia",
-                            uk: "Налаштування",
-                            "zh-cn": "设置",
-                        },
-                        icon: "img/properties.png",
+                common = {
+                    name: {
+                        en: "Settings",
+                        de: "Einstellungen",
+                        ru: "Настройки",
+                        pt: "Configurações",
+                        nl: "Instellingen",
+                        fr: "Paramètres",
+                        it: "Impostazioni",
+                        es: "Ajustes",
+                        pl: "Ustawienia",
+                        uk: "Налаштування",
+                        "zh-cn": "设置",
                     },
-                    native: {},
-                });
-                await this.extendObject(path, {
-                    type: "state",
-                    common: {
-                        name: {
-                            en: "Old pin code",
-                            de: "Alter PIN-Code",
-                            ru: "Старый пин-код",
-                            pt: "Código PIN antigo",
-                            nl: "Oude pincode",
-                            fr: "Ancien code postal",
-                            it: "Vecchio codice PIN",
-                            es: "Código PIN antiguo",
-                            pl: "Stary kod PIN",
-                            uk: "Старий поштовий індекс",
-                            "zh-cn": "旧邮政编码",
-                        },
-                        type: "string",
-                        role: "state",
-                        write: true,
-                        read: true,
+                    icon: "img/properties.png",
+                };
+                await this.sunseeker.createDataPoint(
+                    `${this.namespace}.${sn}.settings`,
+                    common,
+                    "channel",
+                    null,
+                    null,
+                    null,
+                );
+                common = {
+                    name: {
+                        en: "Old pin code",
+                        de: "Alter PIN-Code",
+                        ru: "Старый пин-код",
+                        pt: "Código PIN antigo",
+                        nl: "Oude pincode",
+                        fr: "Ancien code postal",
+                        it: "Vecchio codice PIN",
+                        es: "Código PIN antiguo",
+                        pl: "Stary kod PIN",
+                        uk: "Старий поштовий індекс",
+                        "zh-cn": "旧邮政编码",
                     },
-                    native: {},
-                });
-                await this.extendObject(`${sn}.settings.pin_new`, {
-                    type: "state",
-                    common: {
-                        name: {
-                            en: "New pin code/Set the old PIN first",
-                            de: "Neuer PIN-Code / Zuerst den alten PIN-Code festlegen",
-                            ru: "Новый PIN-код/Сначала установите старый PIN-код",
-                            pt: "Novo código PIN/Primeiro, defina o PIN antigo.",
-                            nl: "Nieuwe pincode/Stel eerst de oude pincode in",
-                            fr: "Nouveau code PIN / Définir l'ancien code PIN en premier",
-                            it: "Nuovo codice PIN/Imposta prima il vecchio PIN",
-                            es: "Nuevo código PIN/Establezca primero el PIN anterior",
-                            pl: "Nowy kod PIN/Najpierw ustaw stary kod PIN",
-                            uk: "Новий PIN-код/Спочатку встановіть старий PIN-код",
-                            "zh-cn": "新密码/先设置旧密码",
-                        },
-                        type: "string",
-                        role: "state",
-                        write: true,
-                        read: true,
+                    type: "string",
+                    role: "state",
+                    write: true,
+                    read: true,
+                };
+                await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
+                common = {
+                    name: {
+                        en: "New pin code/Set the old PIN first",
+                        de: "Neuer PIN-Code / Zuerst den alten PIN-Code festlegen",
+                        ru: "Новый PIN-код/Сначала установите старый PIN-код",
+                        pt: "Novo código PIN/Primeiro, defina o PIN antigo.",
+                        nl: "Nieuwe pincode/Stel eerst de oude pincode in",
+                        fr: "Nouveau code PIN / Définir l'ancien code PIN en premier",
+                        it: "Nuovo codice PIN/Imposta prima il vecchio PIN",
+                        es: "Nuevo código PIN/Establezca primero el PIN anterior",
+                        pl: "Nowy kod PIN/Najpierw ustaw stary kod PIN",
+                        uk: "Новий PIN-код/Спочатку встановіть старий PIN-код",
+                        "zh-cn": "新密码/先设置旧密码",
                     },
-                    native: {},
-                });
+                    type: "string",
+                    role: "state",
+                    write: true,
+                    read: true,
+                };
+                await this.sunseeker.createDataPoint(
+                    `${this.namespace}.${sn}.settings.pin_new`,
+                    common,
+                    "state",
+                    null,
+                    null,
+                    null,
+                );
             }
             await this.ensureWritableSettings(sn, normalized);
+            await this.setSettings(sn, cleanup);
         }
     }
 
@@ -650,7 +645,7 @@ class SunseekerAdapter extends utils.Adapter {
         const path = `${sn}.settings.plan_angle`;
         if (!this.createObjectDone[path]) {
             this.createObjectDone[path] = true;
-            if (cleanup.plan_angle && cleanup.plan_angle.multi_zigzag_angles != null) {
+            if (cleanup.plan_angle && cleanup.plan_angle.multi_zigzag_angles != null && this.sunseeker) {
                 const states = [];
                 states.push(0);
                 if (Object.keys(cleanup.plan_angle.multi_zigzag_angles).length > 0) {
@@ -659,31 +654,35 @@ class SunseekerAdapter extends utils.Adapter {
                             states.push(angle.angle);
                         }
                     }
-                    this.extendObject(`${sn}.settings.plan_angle`, {
-                        type: "state",
-                        common: {
-                            name: {
-                                en: "Multi zigzag angles",
-                                de: "Mehrere Zickzackwinkel",
-                                ru: "Много зигзагообразных углов",
-                                pt: "Ângulos em ziguezague múltiplos",
-                                nl: "Meerdere zigzaghoeken",
-                                fr: "Angles en zigzag multiples",
-                                it: "Angoli a zigzag multipli",
-                                es: "Ángulos en zigzag múltiples",
-                                pl: "Wielokątne kąty zygzakowate",
-                                uk: "Багатокутні зигзаги",
-                                "zh-cn": "多锯齿角",
-                            },
-                            type: "number",
-                            role: "level",
-                            write: true,
-                            read: true,
-                            def: 0,
-                            states: states,
+                    const common = {
+                        name: {
+                            en: "Multi zigzag angles",
+                            de: "Mehrere Zickzackwinkel",
+                            ru: "Много зигзагообразных углов",
+                            pt: "Ângulos em ziguezague múltiplos",
+                            nl: "Meerdere zigzaghoeken",
+                            fr: "Angles en zigzag multiples",
+                            it: "Angoli a zigzag multipli",
+                            es: "Ángulos en zigzag múltiples",
+                            pl: "Wielokątne kąty zygzakowate",
+                            uk: "Багатокутні зигзаги",
+                            "zh-cn": "多锯齿角",
                         },
-                        native: {},
-                    });
+                        type: "number",
+                        role: "level",
+                        write: true,
+                        read: true,
+                        def: 0,
+                        states: states,
+                    };
+                    this.sunseeker.createDataPoint(
+                        `${this.namespace}.${sn}.settings.plan_angle`,
+                        common,
+                        "state",
+                        null,
+                        null,
+                        null,
+                    );
                 }
             }
         }
@@ -728,34 +727,32 @@ class SunseekerAdapter extends utils.Adapter {
             });
             return;
         }
+        let common;
         let path = "";
         if (kind === "backup") {
             path = `${sn}.map.backup`;
-            if (!this.createObjectDone[path]) {
+            if (!this.createObjectDone[path] && this.sunseeker) {
                 this.createObjectDone[path] = true;
-                await this.extendObject(path, {
-                    type: "state",
-                    common: {
-                        name: {
-                            en: "Backup Map (JSON)",
-                            de: "Backup-Karte (JSON)",
-                            ru: "Карта резервного копирования (JSON)",
-                            pt: "Mapa de backup (JSON)",
-                            nl: "Back-upkaart (JSON)",
-                            fr: "Carte de sauvegarde (JSON)",
-                            it: "Mappa di backup (JSON)",
-                            es: "Mapa de respaldo (JSON)",
-                            pl: "Mapa kopii zapasowej (JSON)",
-                            uk: "Резервна карта (JSON)",
-                            "zh-cn": "备份映射（JSON）",
-                        },
-                        type: "string",
-                        role: "json",
-                        read: true,
-                        write: false,
+                common = {
+                    name: {
+                        en: "Backup Map (JSON)",
+                        de: "Backup-Karte (JSON)",
+                        ru: "Карта резервного копирования (JSON)",
+                        pt: "Mapa de backup (JSON)",
+                        nl: "Back-upkaart (JSON)",
+                        fr: "Carte de sauvegarde (JSON)",
+                        it: "Mappa di backup (JSON)",
+                        es: "Mapa de respaldo (JSON)",
+                        pl: "Mapa kopii zapasowej (JSON)",
+                        uk: "Резервна карта (JSON)",
+                        "zh-cn": "备份映射（JSON）",
                     },
-                    native: {},
-                });
+                    type: "string",
+                    role: "json",
+                    read: true,
+                    write: false,
+                };
+                await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
             }
             this.setState(`${sn}.map.backup`, JSON.stringify(payload), true);
             return;
@@ -765,62 +762,56 @@ class SunseekerAdapter extends utils.Adapter {
                 this.checkZone(sn, payload);
             }
             path = `${sn}.map.${kind}`;
-            if (!this.createObjectDone[path]) {
+            if (!this.createObjectDone[path] && this.sunseeker) {
                 this.createObjectDone[path] = true;
-                await this.extendObject(path, {
-                    type: "state",
-                    common: {
-                        name: {
-                            en: `Maps-${kind} (JSON)`,
-                            de: `Karten-${kind} (JSON)`,
-                            ru: `Maps-${kind} (JSON)`,
-                            pt: `Mapas-${kind} (JSON)`,
-                            nl: `Maps-${kind} (JSON)`,
-                            fr: `Cartes-${kind} (JSON)`,
-                            it: `Mappe-${kind} (JSON)`,
-                            es: `Mapas-${kind} (JSON)`,
-                            pl: `Mapy-${kind} (JSON)`,
-                            uk: `Карти-${kind} (JSON)`,
-                            "zh-cn": `地图-${kind} (JSON)`,
-                        },
-                        type: "string",
-                        role: "json",
-                        read: true,
-                        write: false,
+                common = {
+                    name: {
+                        en: `Maps-${kind} (JSON)`,
+                        de: `Karten-${kind} (JSON)`,
+                        ru: `Maps-${kind} (JSON)`,
+                        pt: `Mapas-${kind} (JSON)`,
+                        nl: `Maps-${kind} (JSON)`,
+                        fr: `Cartes-${kind} (JSON)`,
+                        it: `Mappe-${kind} (JSON)`,
+                        es: `Mapas-${kind} (JSON)`,
+                        pl: `Mapy-${kind} (JSON)`,
+                        uk: `Карти-${kind} (JSON)`,
+                        "zh-cn": `地图-${kind} (JSON)`,
                     },
-                    native: {},
-                });
+                    type: "string",
+                    role: "json",
+                    read: true,
+                    write: false,
+                };
+                await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
             }
             this.setState(`${sn}.map.${kind}`, payload, true);
             return;
         }
         // image / wifi / net / texture (data URLs)
         path = `${sn}.map.${kind}`;
-        if (!this.createObjectDone[path]) {
+        if (!this.createObjectDone[path] && this.sunseeker) {
             this.createObjectDone[path] = true;
-            await this.extendObject(path, {
-                type: "state",
-                common: {
-                    name: {
-                        en: `Maps-${kind} (data URL)`,
-                        de: `Maps-${kind} (Daten-URL)`,
-                        ru: `Maps-${kind} (data URL)`,
-                        pt: `Mapas-${kind} (URL de dados)`,
-                        nl: `Maps-${kind} (data-URL)`,
-                        fr: `Cartes-${kind} (URL des données)`,
-                        it: `Mappe-${kind} (URL dei dati)`,
-                        es: `Mapas-${kind} (URL de datos)`,
-                        pl: `Mapy-${kind} (adres URL danych)`,
-                        uk: `Карти-${kind} (URL-адреса даних)`,
-                        "zh-cn": `地图-${kind}（数据 URL)`,
-                    },
-                    type: "string",
-                    role: "state",
-                    read: true,
-                    write: false,
+            common = {
+                name: {
+                    en: `Maps-${kind} (data URL)`,
+                    de: `Maps-${kind} (Daten-URL)`,
+                    ru: `Maps-${kind} (data URL)`,
+                    pt: `Mapas-${kind} (URL de dados)`,
+                    nl: `Maps-${kind} (data-URL)`,
+                    fr: `Cartes-${kind} (URL des données)`,
+                    it: `Mappe-${kind} (URL dei dati)`,
+                    es: `Mapas-${kind} (URL de datos)`,
+                    pl: `Mapy-${kind} (adres URL danych)`,
+                    uk: `Карти-${kind} (URL-адреса даних)`,
+                    "zh-cn": `地图-${kind}（数据 URL)`,
                 },
-                native: {},
-            });
+                type: "string",
+                role: "state",
+                read: true,
+                write: false,
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
         }
         this.setState(`${sn}.map.${kind}`, payload, true);
     }
@@ -871,31 +862,28 @@ class SunseekerAdapter extends utils.Adapter {
 
     async onSunseekerLivemap({ sn, dataUrl }) {
         const path = `${sn}.map.livemap`;
-        if (!this.createObjectDone[path]) {
+        if (!this.createObjectDone[path] && this.sunseeker) {
             this.createObjectDone[path] = true;
-            await this.extendObject(path, {
-                type: "state",
-                common: {
-                    name: {
-                        en: "Live Map (rendered PNG data URL)",
-                        de: "Live-Karte (URL der gerenderten PNG-Daten)",
-                        ru: "Карта в реальном времени (URL-адрес визуализированных данных в формате PNG)",
-                        pt: "Mapa ao vivo (URL com dados PNG renderizados)",
-                        nl: "Live kaart (URL van weergegeven PNG-gegevens)",
-                        fr: "Carte interactive (URL des données PNG rendues)",
-                        it: "Mappa interattiva (URL dei dati PNG renderizzati)",
-                        es: "Mapa interactivo (URL de datos PNG renderizados)",
-                        pl: "Mapa na żywo (wyrenderowany adres URL danych PNG)",
-                        uk: "Жива карта (URL-адреса даних PNG-візуалізації)",
-                        "zh-cn": "实时地图（渲染后的PNG数据URL）",
-                    },
-                    type: "string",
-                    role: "state",
-                    read: true,
-                    write: false,
+            const common = {
+                name: {
+                    en: "Live Map (rendered PNG data URL)",
+                    de: "Live-Karte (URL der gerenderten PNG-Daten)",
+                    ru: "Карта в реальном времени (URL-адрес визуализированных данных в формате PNG)",
+                    pt: "Mapa ao vivo (URL com dados PNG renderizados)",
+                    nl: "Live kaart (URL van weergegeven PNG-gegevens)",
+                    fr: "Carte interactive (URL des données PNG rendues)",
+                    it: "Mappa interattiva (URL dei dati PNG renderizzati)",
+                    es: "Mapa interactivo (URL de datos PNG renderizados)",
+                    pl: "Mapa na żywo (wyrenderowany adres URL danych PNG)",
+                    uk: "Жива карта (URL-адреса даних PNG-візуалізації)",
+                    "zh-cn": "实时地图（渲染后的PNG数据URL）",
                 },
-                native: {},
-            });
+                type: "string",
+                role: "state",
+                read: true,
+                write: false,
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
         }
         this.setState(`${sn}.map.livemap`, dataUrl, true);
     }
@@ -1360,134 +1348,137 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         let path = "";
+        let common;
         if (this.config.apptype !== "Old") {
             if (Object.prototype.hasOwnProperty.call(settingsData, "bladeSpeed")) {
                 path = `${sn}.settings.bladeSpeed`;
-                if (!this.createObjectDone[path]) {
+                if (!this.createObjectDone[path] && this.sunseeker) {
                     this.createObjectDone[path] = true;
-                    await this.extendObject(path, {
-                        type: "state",
-                        common: {
-                            name: {
-                                en: "Blade speed",
-                                de: "Klingengeschwindigkeit",
-                                ru: "Скорость лезвия",
-                                pt: "Velocidade da lâmina",
-                                nl: "Bladsnelheid",
-                                fr: "vitesse de la lame",
-                                it: "velocità della lama",
-                                es: "Velocidad de la hoja",
-                                pl: "Prędkość ostrza",
-                                uk: "Швидкість леза",
-                                "zh-cn": "刀刃速度",
-                            },
-                            type: "number",
-                            role: "level",
-                            min: 2800,
-                            max: 3000,
-                            step: 100,
-                            unit: "rpm",
-                            read: true,
-                            write: true,
+                    common = {
+                        name: {
+                            en: "Blade speed",
+                            de: "Klingengeschwindigkeit",
+                            ru: "Скорость лезвия",
+                            pt: "Velocidade da lâmina",
+                            nl: "Bladsnelheid",
+                            fr: "vitesse de la lame",
+                            it: "velocità della lama",
+                            es: "Velocidad de la hoja",
+                            pl: "Prędkość ostrza",
+                            uk: "Швидкість леза",
+                            "zh-cn": "刀刃速度",
                         },
-                        native: {},
-                    });
+                        type: "number",
+                        role: "level",
+                        min: 2800,
+                        max: 3000,
+                        step: 100,
+                        unit: "rpm",
+                        read: true,
+                        write: true,
+                    };
+                    await this.sunseeker.createDataPoint(
+                        `${this.namespace}.${path}`,
+                        common,
+                        "state",
+                        null,
+                        null,
+                        null,
+                    );
                 }
             }
             if (Object.prototype.hasOwnProperty.call(settingsData, "bladeHeight")) {
                 path = `${sn}.settings.bladeHeight`;
-                if (!this.createObjectDone[path]) {
+                if (!this.createObjectDone[path] && this.sunseeker) {
                     this.createObjectDone[path] = true;
-                    await this.extendObject(path, {
-                        type: "state",
-                        common: {
-                            name: {
-                                en: "Cutting height",
-                                de: "Schnitthöhe",
-                                ru: "Высота среза",
-                                pt: "Altura de corte",
-                                nl: "Snijhoogte",
-                                fr: "Hauteur de coupe",
-                                it: "altezza di taglio",
-                                es: "Altura de corte",
-                                pl: "Wysokość koszenia",
-                                uk: "Висота зрізання",
-                                "zh-cn": "切割高度",
-                            },
-                            type: "number",
-                            role: "level",
-                            min: 20,
-                            max: 100,
-                            step: 5,
-                            unit: "mm",
-                            read: true,
-                            write: true,
+                    common = {
+                        name: {
+                            en: "Cutting height",
+                            de: "Schnitthöhe",
+                            ru: "Высота среза",
+                            pt: "Altura de corte",
+                            nl: "Snijhoogte",
+                            fr: "Hauteur de coupe",
+                            it: "altezza di taglio",
+                            es: "Altura de corte",
+                            pl: "Wysokość koszenia",
+                            uk: "Висота зрізання",
+                            "zh-cn": "切割高度",
                         },
-                        native: {},
-                    });
+                        type: "number",
+                        role: "level",
+                        min: 20,
+                        max: 100,
+                        step: 5,
+                        unit: "mm",
+                        read: true,
+                        write: true,
+                    };
+                    await this.sunseeker.createDataPoint(
+                        `${this.namespace}.${path}`,
+                        common,
+                        "state",
+                        null,
+                        null,
+                        null,
+                    );
                 }
             }
         }
         if (Object.prototype.hasOwnProperty.call(settingsData, "rainFlag")) {
             path = `${sn}.settings.rainFlag`;
-            if (!this.createObjectDone[path]) {
+            if (!this.createObjectDone[path] && this.sunseeker) {
                 this.createObjectDone[path] = true;
-                await this.extendObject(path, {
-                    type: "state",
-                    common: {
-                        name: {
-                            en: "Pause during rain",
-                            de: "Pause bei Regen",
-                            ru: "Пауза во время дождя",
-                            pt: "Pausa durante a chuva",
-                            nl: "Pauzeer tijdens regen",
-                            fr: "Pause pendant la pluie",
-                            it: "Pausa durante la pioggia",
-                            es: "Pausa durante la lluvia",
-                            pl: "Pauza podczas deszczu",
-                            uk: "Пауза під час дощу",
-                            "zh-cn": "雨中暂停",
-                        },
-                        type: "boolean",
-                        role: "switch",
-                        read: true,
-                        write: true,
+                common = {
+                    name: {
+                        en: "Pause during rain",
+                        de: "Pause bei Regen",
+                        ru: "Пауза во время дождя",
+                        pt: "Pausa durante a chuva",
+                        nl: "Pauzeer tijdens regen",
+                        fr: "Pause pendant la pluie",
+                        it: "Pausa durante la pioggia",
+                        es: "Pausa durante la lluvia",
+                        pl: "Pauza podczas deszczu",
+                        uk: "Пауза під час дощу",
+                        "zh-cn": "雨中暂停",
                     },
-                    native: {},
-                });
+                    type: "boolean",
+                    role: "switch",
+                    read: true,
+                    write: true,
+                };
+                await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
             }
         }
         if (Object.prototype.hasOwnProperty.call(settingsData, "rainDelayDuration")) {
             path = `${sn}.settings.rainDelayDuration`;
-            if (!this.createObjectDone[path]) {
+            if (!this.createObjectDone[path] && this.sunseeker) {
                 this.createObjectDone[path] = true;
-                await this.extendObject(path, {
-                    type: "state",
-                    common: {
-                        name: {
-                            en: "Rain Delay Duration",
-                            de: "Regenverzögerungsdauer",
-                            ru: "Продолжительность задержки из-за дождя",
-                            pt: "Duração do atraso devido à chuva",
-                            nl: "Duur van de regenvertraging",
-                            fr: "Durée du retard dû à la pluie",
-                            it: "Durata del ritardo dovuto alla pioggia",
-                            es: "Duración del retraso por lluvia",
-                            pl: "Czas trwania opóźnienia z powodu deszczu",
-                            uk: "Тривалість затримки через дощ",
-                            "zh-cn": "雨天延误时长",
-                        },
-                        type: "number",
-                        role: "level",
-                        min: 0,
-                        max: 720,
-                        step: 1,
-                        unit: "min",
-                        read: true,
-                        write: true,
+                common = {
+                    name: {
+                        en: "Rain Delay Duration",
+                        de: "Regenverzögerungsdauer",
+                        ru: "Продолжительность задержки из-за дождя",
+                        pt: "Duração do atraso devido à chuva",
+                        nl: "Duur van de regenvertraging",
+                        fr: "Durée du retard dû à la pluie",
+                        it: "Durata del ritardo dovuto alla pioggia",
+                        es: "Duración del retraso por lluvia",
+                        pl: "Czas trwania opóźnienia z powodu deszczu",
+                        uk: "Тривалість затримки через дощ",
+                        "zh-cn": "雨天延误时长",
                     },
-                    native: {},
-                });
+                    type: "number",
+                    role: "level",
+                    min: 0,
+                    max: 720,
+                    step: 1,
+                    unit: "min",
+                    read: true,
+                    write: true,
+                };
+                await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
             }
         }
     }
@@ -1585,9 +1576,9 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     async createAuth() {
-        await this.extendObject(`${this.namespace}.auth`, {
-            type: "channel",
-            common: {
+        if (this.sunseeker) {
+            let common;
+            common = {
                 name: {
                     en: "Auth Information",
                     de: "Authentifizierungsinformationen",
@@ -1603,12 +1594,9 @@ class SunseekerAdapter extends utils.Adapter {
                 },
                 desc: "Create by Adapter",
                 icon: "img/auth.png",
-            },
-            native: {},
-        });
-        await this.extendObject(`${this.namespace}.rateLimit`, {
-            type: "channel",
-            common: {
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.auth`, common, "channel", null, null, null);
+            common = {
                 name: {
                     en: "Rate Limit",
                     de: "Ratenbegrenzung",
@@ -1624,14 +1612,9 @@ class SunseekerAdapter extends utils.Adapter {
                 },
                 desc: "Create by Adapter",
                 icon: "img/rate.png",
-            },
-            native: {},
-        });
-        await this.extendObject(`${this.namespace}.auth.session`, {
-            type: "state",
-            common: {
-                type: "string",
-                role: "json",
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.rateLimit`, common, "channel", null, null, null);
+            common = {
                 name: {
                     en: "Session",
                     de: "Sitzung",
@@ -1645,18 +1628,15 @@ class SunseekerAdapter extends utils.Adapter {
                     uk: "Сесія",
                     "zh-cn": "会议",
                 },
+                type: "string",
+                role: "json",
                 desc: "Create by Adapter",
                 read: true,
                 write: false,
                 def: JSON.stringify({}),
-            },
-            native: {},
-        });
-        await this.extendObject(`${this.namespace}.auth.mqtt_connection`, {
-            type: "state",
-            common: {
-                type: "string",
-                role: "json",
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.auth.session`, common, "state", null, null, null);
+            common = {
                 name: {
                     en: "Mqtt connection",
                     de: "MQTT-Verbindung",
@@ -1670,18 +1650,22 @@ class SunseekerAdapter extends utils.Adapter {
                     uk: "З'єднання Mqtt",
                     "zh-cn": "MQTT 连接",
                 },
+                type: "string",
+                role: "json",
                 desc: "Create by Adapter",
                 read: true,
                 write: false,
                 def: JSON.stringify({}),
-            },
-            native: {},
-        });
-        await this.extendObject(`${this.namespace}.rateLimit.restart`, {
-            type: "state",
-            common: {
-                type: "string",
-                role: "json",
+            };
+            await this.sunseeker.createDataPoint(
+                `${this.namespace}.auth.mqtt_connection`,
+                common,
+                "state",
+                null,
+                null,
+                null,
+            );
+            common = {
                 name: {
                     en: "Restart Limit",
                     de: "Neustartlimit",
@@ -1695,6 +1679,8 @@ class SunseekerAdapter extends utils.Adapter {
                     uk: "Ліміт перезапуску",
                     "zh-cn": "重启限制",
                 },
+                type: "string",
+                role: "json",
                 desc: "Create by Adapter",
                 read: true,
                 write: false,
@@ -1704,10 +1690,18 @@ class SunseekerAdapter extends utils.Adapter {
                     restartTime: "",
                     day: "",
                 }),
-            },
-            native: {},
-        });
+            };
+            await this.sunseeker.createDataPoint(
+                `${this.namespace}.rateLimit.restart`,
+                common,
+                "state",
+                null,
+                null,
+                null,
+            );
+        }
     }
+
     async setRestartCount() {
         await this.setState(`rateLimit.restart`, { val: JSON.stringify(this.restartLimit), ack: true });
     }

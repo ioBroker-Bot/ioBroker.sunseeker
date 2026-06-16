@@ -124,6 +124,125 @@
                 "def": false
             },
             "native": {}
+        },
+        {
+            "_id": "auth",
+            "type": "channel",
+            "common": {
+                "name": {
+                    "en": "Auth Information",
+                    "de": "Authentifizierungsinformationen",
+                    "ru": "Информация об аутентификации",
+                    "pt": "Informações de autorização",
+                    "nl": "Autorisatie-informatie",
+                    "fr": "Informations d'autorisation",
+                    "it": "Informazioni di autorizzazione",
+                    "es": "Información de autorización",
+                    "pl": "Informacje o uwierzytelnianiu",
+                    "uk": "Інформація для авторизації",
+                    "zh-cn": "授权信息"
+                },
+                "desc": "Create by Adapter",
+                "icon": "img/auth.png"
+            },
+            "native": {}
+        },
+        {
+            "_id": "rateLimit",
+            "type": "channel",
+            "common": {
+                "name": {
+                    "en": "Rate Limit",
+                    "de": "Ratenbegrenzung",
+                    "ru": "Лимит скорости",
+                    "pt": "Limite de taxa",
+                    "nl": "Snelheidslimiet",
+                    "fr": "Limite de débit",
+                    "it": "Limite di tariffa",
+                    "es": "Límite de tasa",
+                    "pl": "Limit szybkości",
+                    "uk": "Ліміт швидкості",
+                    "zh-cn": "速率限制"
+                },
+                "desc": "Create by Adapter",
+                "icon": "img/rate.png"
+            },
+            "native": {}
+        },
+        {
+            "_id": "auth.session",
+            "type": "state",
+            "common": {
+                "name": {
+                    "en": "Session",
+                    "de": "Sitzung",
+                    "ru": "Сессия",
+                    "pt": "Sessão",
+                    "nl": "Sessie",
+                    "fr": "Session",
+                    "it": "Sessione",
+                    "es": "Sesión",
+                    "pl": "Sesja",
+                    "uk": "Сесія",
+                    "zh-cn": "会议"
+                },
+                "type": "string",
+                "role": "json",
+                "desc": "Create by Adapter",
+                "read": true,
+                "write": false
+            },
+            "native": {}
+        },
+        {
+            "_id": "auth.mqtt_connection",
+            "type": "state",
+            "common": {
+                "name": {
+                    "en": "Mqtt connection",
+                    "de": "MQTT-Verbindung",
+                    "ru": "MQTT-соединение",
+                    "pt": "Conexão MQTT",
+                    "nl": "MQTT-verbinding",
+                    "fr": "Connexion MQTT",
+                    "it": "Connessione MQTT",
+                    "es": "conexión MQTT",
+                    "pl": "Połączenie MQTT",
+                    "uk": "З'єднання Mqtt",
+                    "zh-cn": "MQTT 连接"
+                },
+                "type": "string",
+                "role": "json",
+                "desc": "Create by Adapter",
+                "read": true,
+                "write": false
+            },
+            "native": {}
+        },
+        {
+            "_id": "rateLimit.restart",
+            "type": "state",
+            "common": {
+                "name": {
+                    "en": "Restart Limit",
+                    "de": "Neustartlimit",
+                    "ru": "Ограничение перезапуска",
+                    "pt": "Limite de reinicialização",
+                    "nl": "Herstartlimiet",
+                    "fr": "Limite de redémarrage",
+                    "it": "Limite di riavvio",
+                    "es": "Límite de reinicio",
+                    "pl": "Limit ponownego uruchomienia",
+                    "uk": "Ліміт перезапуску",
+                    "zh-cn": "重启限制"
+                },
+                "type": "string",
+                "role": "json",
+                "desc": "Create by Adapter",
+                "read": true,
+                "write": false
+            },
+            "native": {}
         }
     ]
 }

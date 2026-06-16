@@ -4,44 +4,21 @@
 
 import { EventEmitter } from "node:events";
 
-interface Logger {
-    info: (m: string) => void;
-    warn: (m: string) => void;
-    error: (m: string) => void;
-    debug: (m: string) => void;
-}
-
-interface IobTimers {
-    setTimeout: (c: any, t: number) => void;
-    clearTimeout: (x: ioBroker.Timeout) => void;
-    setInterval: (c: any, t: number) => void;
-    clearInterval: (x: ioBroker.Interval) => void;
-}
-
-interface IobObjects {
-    extendObject: (o: string, d: any) => void;
-}
-
 interface SunseekerOptions {
     region: string;
     apptype: string;
     language: string;
     interval: number;
     refreshAfterMqttMs: number;
-    logger: Logger;
-    iobTimers: IobTimers;
-    iobObjects: IobObjects;
 }
 
 declare class Sunseeker extends EventEmitter {
-    constructor(username: string, password: string, options?: SunseekerOptions);
+    constructor(username: string, password: string, iob: ioBroker.Adapter, options?: SunseekerOptions);
 
     username: string;
     password: string;
+    iob: ioBroker.Adapter;
     options: SunseekerOptions;
-    log: Logger;
-    iobTimer: IobTimers;
-    iobObject: IobObjects;
 
     session: any;
     devicesRaw: Record<string, any>;
@@ -130,6 +107,14 @@ declare class Sunseeker extends EventEmitter {
     ensureRemoteButtons(sn: string): Promise<void>;
     ensureScheduleStates(sn: string): Promise<void>;
     ensureOwnRequestStates(sn: string): Promise<void>;
+    createDataPoint(
+        ident: string,
+        common: any,
+        types: "state" | "folder" | "channel" | "device",
+        value: string | number | boolean | null | undefined,
+        extend: boolean | null | undefined,
+        native: any,
+    ): Promise<void>;
 }
 
 export = Sunseeker;
