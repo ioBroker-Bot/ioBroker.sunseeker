@@ -99,7 +99,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("firmware", payload => this.onSunseekerFirmware(payload));
         this.sunseeker.on("mqttConnect", () => this.setState("info.connection", true, true));
         this.sunseeker.on("mqttDisconnect", () => this.setState("info.connection", false, true));
-        this.sunseeker.on("error", err => this.log.error(err.message || String(err)));
+        this.sunseeker.on("error", err => this.log.error(`mqtt: ${err.message}` || `mqtt: ${String(err)}`));
         this.sunseeker.on("own", payload => this.onSunseekerOwn(payload));
         this.sunseeker.on("mqtt_auth", payload => this.onSunseekerMqttAuth(payload));
         this.sunseeker.on("session", payload => this.onSunseekerSession(payload));
@@ -885,7 +885,7 @@ class SunseekerAdapter extends utils.Adapter {
             };
             await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
         }
-        this.setState(`${sn}.map.livemap`, dataUrl, true);
+        this.setState(path, dataUrl, true);
     }
 
     /**
@@ -954,7 +954,7 @@ class SunseekerAdapter extends utils.Adapter {
         const snr = parts[mapIdx - 1];
         if (parts[mapIdx + 1] === "livemap_update" && state && typeof state.val === "boolean") {
             this.sunseeker.setLiveMap(snr, state.val);
-            this.setState(id, { val: state.val, ack: true });
+            this.setState(id, { val: false, ack: true });
             return;
         }
         const ownIdx = parts.indexOf("expert");
@@ -1087,7 +1087,7 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "dev_name") {
                 if (typeof state.val === "string" && state.val != "") {
-                    this.sunseeker.setSettings(sn, state.val, "setDeviveName", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setDevName", leaf);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
