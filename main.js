@@ -1033,7 +1033,7 @@ class SunseekerAdapter extends utils.Adapter {
                 }
                 return;
             }
-            if (leaf === "firmware_update_check_manuel") {
+            if (leaf === "firmware_update_check_manual") {
                 if (typeof state.val === "boolean") {
                     // FW Check for all devices
                     this.sunseeker.startUpdateCheck(false);
