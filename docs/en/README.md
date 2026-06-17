@@ -93,7 +93,6 @@ These settings are made writable directly under `<sn>.settings.*`. Writing them 
 | `workSpeed`                    | 1 = slow<br>2 = standard<br>3 = fast                           | —    | New API only  |
 | `ai_sensitivity`               | 0 = low<br>1 = high                                            | —    | New API only  |
 | `dev_name`                     | Change device name                                             | —    | New API only  |
-| `dev_model`                    | Change device model name                                       | —    | New API only  |
 | `energy_saving_mode`           | boolean                                                        | —    | New API only  |
 | `pin_old`                      | Change Pin Code -> Old Pin                                     | —    | New API only  |
 | `pin_new`                      | New Pin (Set the old PIN first)                                | —    | New API only  |
