@@ -71,6 +71,7 @@
         "tier": 3,
         "mode": "daemon",
         "type": "garden",
+        "messagebox": true,
         "compact": true,
         "connectionType": "cloud",
         "dataSource": "poll",

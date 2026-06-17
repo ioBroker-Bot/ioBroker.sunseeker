@@ -29,6 +29,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.on("ready", this.onReady.bind(this));
         this.on("stateChange", this.onStateChange.bind(this));
         this.on("unload", this.onUnload.bind(this));
+        this.on("message", this.onMessage.bind(this));
 
         this.json2iob = new Json2iob(this);
         /** @type {Sunseeker | null} */
@@ -119,6 +120,49 @@ class SunseekerAdapter extends utils.Adapter {
             await this.sunseeker.updateAllDevices();
         } catch (err) {
             this.log.warn(`Initial-Update: ${err.message}`);
+        }
+    }
+
+    /**
+     * @param {ioBroker.Message} obj
+     */
+    async onMessage(obj) {
+        if (typeof obj === "object" && obj.message) {
+            switch (obj.command) {
+                case "createOwnRequest":
+                    if (obj.message && obj.message.sn && obj.message.sn != "" && this.sunseeker) {
+                        if (!this.sunseeker.devicesRaw[obj.message.sn]) {
+                            this.log.warn(`createOwnRequest: Device ${obj.message.sn} unknown`);
+                            if (obj.callback) {
+                                this.sendTo(
+                                    obj.from,
+                                    obj.command,
+                                    [{ info: `Device ${obj.message.sn} unknown` }],
+                                    obj.callback,
+                                );
+                            }
+                            return;
+                        }
+                        this.sunseeker.ensureOwnRequestStates(obj.message.sn);
+                        if (obj.callback) {
+                            this.sendTo(obj.from, obj.command, [{ info: "OK" }], obj.callback);
+                        }
+                    } else {
+                        if (obj.callback) {
+                            this.sendTo(obj.from, obj.command, [{ info: "Error" }], obj.callback);
+                        }
+                    }
+                    break;
+                case "sendOwnRequest":
+                    if (obj.callback) {
+                        this.sendTo(obj.from, obj.command, [{ info: "In progress" }], obj.callback);
+                    }
+                    break;
+                default:
+                    if (obj.callback) {
+                        this.sendTo(obj.from, obj.command, [{ info: "Error" }], obj.callback);
+                    }
+            }
         }
     }
 
@@ -317,7 +361,6 @@ class SunseekerAdapter extends utils.Adapter {
                 this.createObjectDone["ensureRemoteButtons"] = true;
                 await this.sunseeker.ensureRemoteButtons(sn);
                 await this.sunseeker.ensureScheduleStates(sn);
-                await this.sunseeker.ensureOwnRequestStates(sn);
             }
             if (!this.createObjectDone[path] && this.sunseeker) {
                 this.createObjectDone[path] = true;
@@ -944,6 +987,10 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         const parts = id.split(".");
+        if (!this.sunseeker.devicesRaw[parts[2]]) {
+            this.log.warn(`onStateChange: Device ${parts[2]} unknown`);
+            return;
+        }
         const eventsIdx = parts.indexOf("events");
         if (parts[eventsIdx + 1] === "eventUpdate") {
             await this.sunseeker.getEvents(parts[eventsIdx - 1], 1, 10);
