@@ -100,7 +100,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("firmware", payload => this.onSunseekerFirmware(payload));
         this.sunseeker.on("mqttConnect", () => this.setState("info.connection", true, true));
         this.sunseeker.on("mqttDisconnect", () => this.setState("info.connection", false, true));
-        this.sunseeker.on("error", err => this.log.error(`mqtt: ${err.message}` || `mqtt: ${String(err)}`));
+        this.sunseeker.on("error", err => this.log.error(err.message || String(err)));
         this.sunseeker.on("own", payload => this.onSunseekerOwn(payload));
         this.sunseeker.on("mqtt_auth", payload => this.onSunseekerMqttAuth(payload));
         this.sunseeker.on("session", payload => this.onSunseekerSession(payload));
