@@ -100,7 +100,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("firmware", payload => this.onSunseekerFirmware(payload));
         this.sunseeker.on("mqttConnect", () => this.setState("info.connection", true, true));
         this.sunseeker.on("mqttDisconnect", () => this.setState("info.connection", false, true));
-        this.sunseeker.on("error", err => this.log.error(err.message || String(err)));
+        this.sunseeker.on("error", err => this.log.error(`mqtt error: ${err.message || String(err)}`));
         this.sunseeker.on("own", payload => this.onSunseekerOwn(payload));
         this.sunseeker.on("mqtt_auth", payload => this.onSunseekerMqttAuth(payload));
         this.sunseeker.on("session", payload => this.onSunseekerSession(payload));
@@ -1134,7 +1134,7 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "dev_name") {
                 if (typeof state.val === "string" && state.val != "") {
-                    this.sunseeker.setSettings(sn, state.val, "setDevName", leaf);
+                    this.sunseeker.setDeviceName(sn, state);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
@@ -1584,9 +1584,9 @@ class SunseekerAdapter extends utils.Adapter {
             if (data.dev_name != null) {
                 await this.setState(`${sn}.settings.dev_name`, { val: data.dev_name, ack: true });
             }
-            if (data.dev_model != null) {
-                await this.setState(`${sn}.settings.dev_model`, { val: data.dev_model, ack: true });
-            }
+            //if (data.dev_model != null) {
+            //    await this.setState(`${sn}.settings.dev_model`, { val: data.dev_model, ack: true });
+            //}
             if (data.energy_saving_mode != null) {
                 await this.setState(`${sn}.settings.energy_saving_mode`, { val: data.energy_saving_mode, ack: true });
             }
