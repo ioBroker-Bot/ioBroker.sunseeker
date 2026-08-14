@@ -26,6 +26,7 @@ declare class Sunseeker extends EventEmitter {
     mqttClient: any;
     mqttOldClient: any;
     mqttPassword: string | undefined;
+    appId: string | undefined;
     eventCodes: Record<string, string>;
     v1EventCodes: Record<string, string>;
     unloading: boolean;
@@ -47,6 +48,7 @@ declare class Sunseeker extends EventEmitter {
     refreshToken(): Promise<void>;
     encryptRsa(plaintext: string): string;
     randomMqttPassword(): string;
+    ensureAppId(): Promise<string>;
     editMqttPassword(): Promise<void>;
     ownRequest(sn: string, data: any): Promise<void>;
 

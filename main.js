@@ -1714,6 +1714,28 @@ class SunseekerAdapter extends utils.Adapter {
             );
             common = {
                 name: {
+                    en: "App id (device id for MQTT)",
+                    de: "App-ID (Geräte-ID für MQTT)",
+                    ru: "Идентификатор приложения (ID устройства для MQTT)",
+                    pt: "ID do aplicativo (ID do dispositivo para MQTT)",
+                    nl: "App-id (apparaat-id voor MQTT)",
+                    fr: "ID de l'application (ID d'appareil pour MQTT)",
+                    it: "ID app (ID dispositivo per MQTT)",
+                    es: "ID de app (ID de dispositivo para MQTT)",
+                    pl: "Identyfikator aplikacji (ID urządzenia dla MQTT)",
+                    uk: "Ідентифікатор програми (ID пристрою для MQTT)",
+                    "zh-cn": "应用 ID（MQTT 设备 ID）",
+                },
+                type: "string",
+                role: "text",
+                desc: "Delete to generate a new one",
+                read: true,
+                write: false,
+                def: "",
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.auth.app_id`, common, "state", null, null, null);
+            common = {
+                name: {
                     en: "Restart Limit",
                     de: "Neustartlimit",
                     ru: "Ограничение перезапуска",
