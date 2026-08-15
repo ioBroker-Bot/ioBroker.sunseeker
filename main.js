@@ -1005,9 +1005,8 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         const ownIdx = parts.indexOf("expert");
-        const ownSn = parts[ownIdx - 1];
         if (parts[ownIdx + 1] === "request" && state && typeof state.val === "string" && state.val.startsWith("{")) {
-            //this.sunseeker.ownRequest(ownSn, state.val);
+            //this.sunseeker.ownRequest(parts[ownIdx - 1], state.val);
             this.setState(id, { val: state.val, ack: true });
             return;
         }
