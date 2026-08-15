@@ -1728,7 +1728,7 @@ class SunseekerAdapter extends utils.Adapter {
                 },
                 type: "string",
                 role: "text",
-                desc: "Delete to generate a new one",
+                desc: "Delete and restart the adapter to generate a new one",
                 read: true,
                 write: false,
                 def: "",
