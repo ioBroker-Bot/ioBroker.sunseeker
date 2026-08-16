@@ -889,6 +889,10 @@ class SunseekerAdapter extends utils.Adapter {
      */
     async onSunseekerMqttAuth(payload) {
         const obj = Object.assign({}, payload);
+        // Never persist the plaintext MQTT password: encrypt both fields.
+        if (obj.pw != null) {
+            obj.pw = this.encrypt(String(obj.pw));
+        }
         obj.key = this.encrypt(obj.key);
         await this.setState(`auth.mqtt_connection`, { val: JSON.stringify(obj), ack: true });
     }
