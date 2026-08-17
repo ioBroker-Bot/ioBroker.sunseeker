@@ -11,9 +11,6 @@
 
 **Tests:** ![Test and Release](https://github.com/iobroker-community-adapters/ioBroker.sunseeker/workflows/Test%20and%20Release/badge.svg)
 
-> [!CAUTION]
-> This adapter has been revoked by Lucky-ESA due to security concerns
-
 ## Sunseeker mower adapter for ioBroker
 
 Connects Sunseeker robotic lawn mowers (also rebranded as Adano, Brücke, etc.) to ioBroker through the official Sunseeker cloud. Both the legacy (`Old`) and current (`New`) Sunseeker APIs are supported, covering the S, X, V and V1 model classes.
