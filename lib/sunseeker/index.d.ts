@@ -49,7 +49,7 @@ declare class Sunseeker extends EventEmitter {
     login(): Promise<void>;
     refreshToken(): Promise<void>;
     encryptRsa(plaintext: string): string;
-    randomMqttPassword(): string;
+    randomString(len: number): string;
     ensureAppId(): Promise<string>;
     getAppUserInfo(): Promise<any>;
     editMqttPassword(): Promise<void>;
@@ -63,6 +63,8 @@ declare class Sunseeker extends EventEmitter {
     getEvents(sn: string, current: number, size: number): Promise<void>;
     setScheduleInfo(sn: string, data: any): void;
     setScheduleMode(sn: string, mode: number): void;
+    readLivemapSettings(sn: string): Promise<void>;
+    setLiveSettings(sn: string, value: ioBroker.State | null | undefined, attribut: string): void;
 
     // polling-and-settings.js
     startPolling(): void;
@@ -71,7 +73,13 @@ declare class Sunseeker extends EventEmitter {
     updateDevice(sn: string): Promise<void>;
     sendCommand(sn: string, command: string, value?: any): Promise<void>;
     setBlade(sn: string, key: "speed" | "height", value: number): Promise<void>;
-    setSettings(sn: string, value: string | number | boolean | null, id: string, key: string): Promise<void>;
+    setSettings(
+        sn: string,
+        value: string | number | boolean | null,
+        id: string,
+        key: string,
+        addValue: any,
+    ): Promise<void>;
     setRain(sn: string, flag: boolean, durationMin: number): Promise<void>;
     setSchedule(sn: string, plan: Record<string, any>, plan2: Record<string, any>): Promise<void>;
     parseScheduleDay(value: string): { startSec: number; endSec: number } | null;
@@ -85,6 +93,12 @@ declare class Sunseeker extends EventEmitter {
     sleep(ms: number): Promise<void>;
     setPlanMode(sn: string, mode: number, angle: number): Promise<void>;
     setDeviceName(sn: string, val: ioBroker.State | null | undefined): Promise<void>;
+    setAutoUpgrade(sn: string, val: ioBroker.State | null | undefined): Promise<void>;
+    setNotice(sn: string, data: any): Promise<void>;
+    getNotice(sn: string): Promise<void>;
+    setMarkAllAsRead(sn: string): Promise<void>;
+    getScheduleX(sn: string): Promise<void>;
+    getInfo(sn: string): Promise<void>;
 
     // mqtt.js
     initMqtt(): void;
@@ -99,6 +113,9 @@ declare class Sunseeker extends EventEmitter {
     fetchInitialProperties(): Promise<void>;
     setLiveMap(sn: string, val: boolean): void;
     fetchAllProperties(sn: string): Promise<void>;
+    liveMapHandler(sn: string, data: any, event: "change" | "path"): Promise<void>;
+    isWorking(sn: string, data: any): void;
+    getMapTempName(sn: string): void;
 
     // map.js
     fetchMap(sn: string): Promise<void>;
@@ -121,6 +138,9 @@ declare class Sunseeker extends EventEmitter {
         extend: boolean | null | undefined,
         native: any,
     ): Promise<void>;
+    setStates(sn: string, data: any, isAvailable: any): Promise<void>;
+    addDeleteObject(sn: string, data: any, objChannel: string, objName: string, lang: any): Promise<void>;
+    createLivemapSettings(sn: string): Promise<void>;
 }
 
 export = Sunseeker;

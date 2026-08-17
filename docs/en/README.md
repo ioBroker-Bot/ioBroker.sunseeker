@@ -43,7 +43,15 @@ For each mower (serial `<sn>`) the adapter creates these channels:
 - `<sn>.events` — Mowing event log as json and manuel update button
 - `<sn>.map` — map data (only for S/X models, when available):
     - `info` — raw response of `/wireless_map/wireless_device/get` (sizes, magnification, `mapModifyTime`, …)
-    - `zonen` — Zonen information
+    - `zones` — Zones information
+        - `change_active_map_name`
+        - `delete_active_map_select`
+        - `delete_active_map`
+        - `save_active_map`
+        - `merge_zone`
+            - `xx.start_mowing_selected_area`
+            - `xx.name`
+            - `xx.split_zones`
     - `image` — heatmap (PNG data URL; often empty if the cloud has not rendered one)
     - `wifi` — WiFi signal heatmap (PNG data URL)
     - `net` — 4G signal heatmap (PNG data URL)
@@ -53,6 +61,34 @@ For each mower (serial `<sn>`) the adapter creates these channels:
     - `backup` — backup map JSON (from `/wireless_map/backup_map/get`)
     - `livemap` — adapter-rendered PNG data URL (zones, obstacles, recorded path, charger position; rendered with `pureimage`)
     - `livemap_update` - livemap enable/disable (enable = +80 MB RAM)
+    - `map_settings` - Livemap settings
+        - `region_channel_fill` -
+        - `region_channel_stroke` -
+        - `region_channel_lineWidth` -
+        - `region_work_fill` -
+        - `region_work_stroke` -
+        - `region_work_lineWidth` -
+        - `region_forbidden_fill` -
+        - `region_forbidden_stroke` -
+        - `region_forbidden_lineWidth` -
+        - `region_placed_blank_fill` -
+        - `region_placed_blank_stroke` -
+        - `region_placed_blank_lineWidth` -
+        - `region_obstacle_fill` -
+        - `region_obstacle_stroke` -
+        - `region_obstacle_lineWidth` -
+        - `divide_area_work_stroke` -
+        - `divide_area_work_lineWidth` -
+        - `polyline_color` -
+        - `polyline_lineWidth` -
+        - `robot_path` -
+        - `charger_path` -
+        - `robot_charger_scale` -
+    - `maps` - All Backup Maps
+        - `mapName` — Change Map Name
+        - `useThisMap` — Restore Map
+        - `delete_select` — Selete to delete backup map
+        - `delete` — Delete Backup Map
 
 Raw payloads (REST and MQTT) are written through `json2iob` directly — no parallel adapter-side data model is maintained.
 
@@ -96,11 +132,17 @@ These settings are made writable directly under `<sn>.settings.*`. Writing them 
 | `energy_saving_mode`           | boolean                                                        | —    | New API only  |
 | `pin_old`                      | Change Pin Code -> Old Pin                                     | —    | New API only  |
 | `pin_new`                      | New Pin (Set the old PIN first)                                | —    | New API only  |
-| `firmware_current`             | available Firmware                                             | —    | Old + New API |
-| `firmware_description`         | Description current or new FW                                  | —    | Old + New API |
-| `firmware_update_available`    | Available FW (Automatic check every 24 hours)                  | —    | Old + New API |
+| `firmware_current`             | available Firmware (readonly)                                  | —    | Old + New API |
+| `firmware_description`         | Description current or new FW (readonly)                       | —    | Old + New API |
+| `firmware_update_available`    | Available FW (Automatic check every 24 hours - readonly)       | —    | Old + New API |
 | `firmware_update_start`        | Start upgrade when available                                   | —    | Old + New API |
-| `firmware_update_check_manuel` | Manual check                                                   | —    | Old + New API |
+| `firmware_update_check_manual` | Manual check                                                   | —    | Old + New API |
+| `custom_flag`                  | Set custom flag                                                | —    | New API only  |
+| `auto_upgrade`                 |                                                                | —    | New API only  |
+| `reset_bladeplate`             |                                                                | —    | New API only  |
+| `reset_blade`                  |                                                                | —    | New API only  |
+| `reset_smal_bladeplate`        |                                                                | —    | New API only  |
+| `reset_smal_blade`             |                                                                | —    | New API only  |
 
 When writing blade values, the adapter posts `{ id: "setDevBlade", key: "blade", method: "set_property", speed|height: <int> }`. After 1.5 s a status refresh is scheduled; MQTT push usually updates the values as well.
 
@@ -116,10 +158,11 @@ A simple weekly plan with one window per day. The states are writable but the cl
 
 | State                       | Type                                                           | Format                                                               |
 | --------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `monday` … `sunday`         | string                                                         | `"HH:MM-HH:MM"` for the active window, empty string disables the day |
-| `pause`                     | boolean                                                        | Pause the schedule without clearing the windows                      |
-| `set`                       | button                                                         | Sends the current values to the cloud                                |
-| `loadSchedule`              | button                                                         | Load current schedule                                                |
+| `1_monday_1` … `0_sunday_1` | string                                                         | `"HH:MM-HH:MM"` for the active window, empty string disables the day |
+| `1_monday_2` … `0_sunday_2` | string                                                         | `"HH:MM-HH:MM"` for the active window, empty string disables the day |
+| `pauseSchedule`             | boolean                                                        | Pause the schedule without clearing the windows                      |
+| `setSchedule`               | button                                                         | Sends the current values to the cloud                                |
+| `getSchedule`               | button                                                         | Load current schedule                                                |
 | `schedule_time_work_repeat` | button                                                         | Mowing cycle with schedule                                           |
 | `schedule_mode`             | 0 = no schedule</br>1 = recomended</br>1 = custom (X & S only) | Sends the current values to the cloud                                |
 | `schedule_time_zone`        | number                                                         | Timezone                                                             |

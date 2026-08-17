@@ -34,13 +34,15 @@ class SunseekerAdapter extends utils.Adapter {
         this.json2iob = new Json2iob(this);
         /** @type {Sunseeker | null} */
         this.sunseeker = null;
-        this.updateDeviceCommand = null;
-        this.updateDeviceRain = null;
-        this.updateDeviceBlade = null;
         this.updateDeviceSet = null;
+        this.updateDeviceStateChange = null;
         this.createObjectDone = {};
         this.firstStart = {};
         this.firstStartTimeout = null;
+        this.availableMaps = null;
+        this.regionsCounter = {};
+        this.regionId = {};
+        this.notice = {};
         this.restartLimit = {
             restartCount: 0,
             restartLast: 0,
@@ -85,7 +87,7 @@ class SunseekerAdapter extends utils.Adapter {
             apptype: cfg.apptype || "New",
             language: cfg.language || "de-DE",
             interval: Number(cfg.interval) > 0 ? Number(cfg.interval) : 300,
-            refreshAfterMqttMs: 60000,
+            refreshAfterMqttMs: 60 * 1000,
         });
 
         await this.createAuth();
@@ -93,8 +95,10 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("devices", payload => this.onSunseekerDevices(payload));
         this.sunseeker.on("records", payload => this.onSunseekerRecords(payload));
         this.sunseeker.on("status", payload => this.onSunseekerStatus(payload));
+        this.sunseeker.on("zigzag", payload => this.onSunseekerMultiZigZag(payload));
+        this.sunseeker.on("notice", payload => this.onSunseekerNotice(payload));
         this.sunseeker.on("mqtt", payload => this.onSunseekerMqtt(payload));
-        this.sunseeker.on("setMqtt", payload => this.onSunseekerSetMqtt(payload));
+        this.sunseeker.on("objectExists", payload => this.onSunseekerObjectExists(payload));
         this.sunseeker.on("map", payload => this.onSunseekerMap(payload));
         this.sunseeker.on("livemap", payload => this.onSunseekerLivemap(payload));
         this.sunseeker.on("firmware", payload => this.onSunseekerFirmware(payload));
@@ -130,20 +134,20 @@ class SunseekerAdapter extends utils.Adapter {
         if (typeof obj === "object" && obj.message) {
             switch (obj.command) {
                 case "createOwnRequest":
-                    if (obj.message && obj.message.sn && obj.message.sn != "" && this.sunseeker) {
-                        if (!this.sunseeker.devicesRaw[obj.message.sn]) {
-                            this.log.warn(`createOwnRequest: Device ${obj.message.sn} unknown`);
+                    if (obj.message && obj.message.parameter && obj.message.parameter != "" && this.sunseeker) {
+                        if (!this.sunseeker.devicesRaw[obj.message.parameter]) {
+                            this.log.warn(`createOwnRequest: Device ${obj.message.parameter} unknown`);
                             if (obj.callback) {
                                 this.sendTo(
                                     obj.from,
                                     obj.command,
-                                    [{ info: `Device ${obj.message.sn} unknown` }],
+                                    [{ info: `Device ${obj.message.parameter} unknown` }],
                                     obj.callback,
                                 );
                             }
                             return;
                         }
-                        //this.sunseeker.ensureOwnRequestStates(obj.message.sn);
+                        this.sunseeker.ensureOwnRequestStates(obj.message.parameter);
                         if (obj.callback) {
                             this.sendTo(obj.from, obj.command, [{ info: "OK" }], obj.callback);
                         }
@@ -177,11 +181,9 @@ class SunseekerAdapter extends utils.Adapter {
                 this.sunseeker.stop();
                 this.sunseeker = null;
             }
-            this.updateDeviceCommand && this.clearTimeout(this.updateDeviceCommand);
             this.firstStartTimeout && this.clearTimeout(this.firstStartTimeout);
-            this.updateDeviceRain && this.clearTimeout(this.updateDeviceRain);
-            this.updateDeviceBlade && this.clearTimeout(this.updateDeviceBlade);
             this.updateDeviceSet && this.clearTimeout(this.updateDeviceSet);
+            this.updateDeviceStateChange && this.clearTimeout(this.updateDeviceStateChange);
             this.setState("info.connection", false, true);
             callback();
         } catch (error) {
@@ -202,14 +204,14 @@ class SunseekerAdapter extends utils.Adapter {
         const meta = this.sunseeker.deviceMeta[sn];
         const events = this.sunseeker.getEventCodes(meta && meta.modelClass);
         const states = {
-            0: `${meta && meta.modelClass == "X" && meta.modelClass == "S" ? "unknown" : "standby"}`,
-            1: `${meta && meta.modelClass == "X" && meta.modelClass == "S" ? "idle" : "mowing"}`,
-            2: `${meta && meta.modelClass == "X" && meta.modelClass == "S" ? "working" : "going home"}`,
-            3: `${meta && meta.modelClass == "X" && meta.modelClass == "S" ? "pause" : "charging"}`,
+            0: `${meta && (meta.modelClass === "X" || meta.modelClass === "S") ? "unknown" : "standby"}`,
+            1: `${meta && (meta.modelClass === "X" || meta.modelClass === "S") ? "idle" : "mowing"}`,
+            2: `${meta && (meta.modelClass === "X" || meta.modelClass === "S") ? "working" : "going home"}`,
+            3: `${meta && (meta.modelClass === "X" || meta.modelClass === "S") ? "pause" : "charging"}`,
             4: "unknown",
             5: "unknown",
             6: "error",
-            7: `${meta && meta.modelClass == "X" && meta.modelClass == "S" ? "return" : "mowing border"}`,
+            7: `${meta && (meta.modelClass === "X" || meta.modelClass === "S") ? "return" : "mowing border"}`,
             8: "pause",
             9: "charging",
             10: "charging full",
@@ -232,6 +234,13 @@ class SunseekerAdapter extends utils.Adapter {
         };
     }
 
+    /**
+     * @param {string} path
+     */
+    onSunseekerObjectExists(path) {
+        this.createObjectDone[path] = true;
+    }
+
     async onSunseekerDevices({ devices }) {
         if (!Array.isArray(devices)) {
             return;
@@ -239,6 +248,17 @@ class SunseekerAdapter extends utils.Adapter {
         let common;
         for (const d of devices) {
             const sn = d.deviceSn;
+            this.regionId[sn] = [];
+            if (!this.regionsCounter[sn]) {
+                this.regionsCounter[sn] = {
+                    passage: 0,
+                    forbidden: 0,
+                    obstacle: 0,
+                    placed: 0,
+                    work: 0,
+                    blank: 0,
+                };
+            }
             let path = "";
             if (this.sunseeker) {
                 common = {
@@ -278,22 +298,22 @@ class SunseekerAdapter extends utils.Adapter {
                         );
                         common = {
                             name: {
-                                en: "Zonen",
+                                en: "Zones",
                                 de: "Zonen",
-                                ru: "Зонен",
-                                pt: "Zona",
+                                ru: "Зоны",
+                                pt: "Zonas",
                                 nl: "Zones",
-                                fr: "Zonen",
-                                it: "Zonan",
-                                es: "Zona",
+                                fr: "Zones",
+                                it: "Zone",
+                                es: "Zonas",
                                 pl: "Strefy",
-                                uk: "Зонен",
-                                "zh-cn": "区域",
+                                uk: "Зони",
+                                "zh-cn": "Zones",
                             },
                             icon: "img/map.png",
                         };
                         await this.sunseeker.createDataPoint(
-                            `${this.namespace}.${path}.zonen`,
+                            `${this.namespace}.${path}.zones`,
                             common,
                             "channel",
                             null,
@@ -334,6 +354,11 @@ class SunseekerAdapter extends utils.Adapter {
                         this.sunseeker.setLiveMap(sn, data.val);
                     }
                 }
+                if (!this.createObjectDone["ensureRemoteButtons"]) {
+                    this.createObjectDone["ensureRemoteButtons"] = true;
+                    await this.sunseeker.ensureScheduleStates(sn);
+                    await this.sunseeker.ensureRemoteButtons(sn);
+                }
             }
             path = `${sn}.mower_raw`;
             const cleanup = this.removeNull(d);
@@ -357,11 +382,6 @@ class SunseekerAdapter extends utils.Adapter {
                     picUrlDetail: "text.url",
                 },
             });
-            if (!this.createObjectDone["ensureRemoteButtons"] && this.sunseeker) {
-                this.createObjectDone["ensureRemoteButtons"] = true;
-                await this.sunseeker.ensureRemoteButtons(sn);
-                await this.sunseeker.ensureScheduleStates(sn);
-            }
             if (!this.createObjectDone[path] && this.sunseeker) {
                 this.createObjectDone[path] = true;
                 common = {
@@ -415,6 +435,81 @@ class SunseekerAdapter extends utils.Adapter {
             };
             await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "channel", null, null, null);
         }
+        path = `${sn}.events.unreadSystemMessage`;
+        if (!this.createObjectDone[path] && this.sunseeker) {
+            this.createObjectDone[path] = true;
+            common = {
+                name: {
+                    en: "Unread system messages",
+                    de: "Ungelesene Systemnachrichten",
+                    ru: "Непрочитанные системные сообщения",
+                    pt: "Mensagens de sistema não lidas",
+                    nl: "Ongelezen systeemberichten",
+                    fr: "Messages système non lus",
+                    it: "Messaggi di sistema non letti",
+                    es: "Mensajes del sistema no leídos",
+                    pl: "Nieprzeczytane wiadomości systemowe",
+                    uk: "Непрочитані системні повідомлення",
+                    "zh-cn": "未读系统消息",
+                },
+                type: "number",
+                role: "value",
+                write: false,
+                read: true,
+                def: 0,
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
+        }
+        path = `${sn}.events.unreadEventMessage`;
+        if (!this.createObjectDone[path] && this.sunseeker) {
+            this.createObjectDone[path] = true;
+            common = {
+                name: {
+                    en: "Unread messages",
+                    de: "Ungelesene Nachrichten",
+                    ru: "Непрочитанные сообщения",
+                    pt: "Mensagens não lidas",
+                    nl: "Ongelezen berichten",
+                    fr: "Messages non lus",
+                    it: "Messaggi non letti",
+                    es: "Mensajes no leídos",
+                    pl: "Nieprzeczytane wiadomości",
+                    uk: "Непрочитані повідомлення",
+                    "zh-cn": "未读消息",
+                },
+                type: "number",
+                role: "value",
+                write: false,
+                read: true,
+                def: 0,
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
+        }
+        path = `${sn}.events.makeAllRead`;
+        if (!this.createObjectDone[path] && this.sunseeker) {
+            this.createObjectDone[path] = true;
+            common = {
+                name: {
+                    en: "Mark all as read",
+                    de: "Alle als gelesen markieren",
+                    ru: "Отметьте все как прочитанное",
+                    pt: "Marcar tudo como lido",
+                    nl: "Markeer alles als gelezen",
+                    fr: "Marquer tout comme lu",
+                    it: "Segna tutto come letto",
+                    es: "Marcar todo como leído",
+                    pl: "Oznacz wszystkie jako przeczytane",
+                    uk: "Позначити всі як прочитані",
+                    "zh-cn": "全部标记为已读",
+                },
+                type: "boolean",
+                role: "button",
+                write: true,
+                read: false,
+                def: false,
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
+        }
         path = `${sn}.events.eventUpdate`;
         if (!this.createObjectDone[path] && this.sunseeker) {
             this.createObjectDone[path] = true;
@@ -465,8 +560,120 @@ class SunseekerAdapter extends utils.Adapter {
             };
             await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
         }
+        path = `${sn}.events.eventNotification`;
+        if (!this.createObjectDone[path] && this.sunseeker) {
+            this.createObjectDone[path] = true;
+            common = {
+                name: {
+                    en: "Event Notification",
+                    de: "Ereignisbenachrichtigung",
+                    ru: "Уведомление о событии",
+                    pt: "Notificação de evento",
+                    nl: "Gebeurtenismelding",
+                    fr: "Notification d'événement",
+                    it: "Notifica dell'evento",
+                    es: "Notificación de evento",
+                    pl: "Powiadomienie o zdarzeniu",
+                    uk: "Сповіщення про подію",
+                    "zh-cn": "事件通知",
+                },
+                type: "string",
+                role: "json",
+                write: false,
+                read: true,
+                def: JSON.stringify({}),
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
+        }
+        path = `${sn}.events.systemMessage`;
+        if (!this.createObjectDone[path] && this.sunseeker) {
+            this.createObjectDone[path] = true;
+            common = {
+                name: {
+                    en: "System messages as JSON",
+                    de: "Systemmeldungen als JSON",
+                    ru: "Системные сообщения в формате JSON",
+                    pt: "Mensagens do sistema em formato JSON",
+                    nl: "Systeemberichten als JSON",
+                    fr: "Messages système au format JSON",
+                    it: "Messaggi di sistema in formato JSON",
+                    es: "Mensajes del sistema como JSON",
+                    pl: "Wiadomości systemowe w formacie JSON",
+                    uk: "Системні повідомлення у форматі JSON",
+                    "zh-cn": "系统消息（JSON 格式）",
+                },
+                type: "string",
+                role: "json",
+                write: false,
+                read: true,
+                def: JSON.stringify({}),
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
+        }
         await this.setState(path, { val: JSON.stringify(records), ack: true });
         //ToDo Interval for update
+    }
+
+    async onSunseekerNotice({ sn, notice }) {
+        const cleanup = this.removeNull(notice);
+        this.log.debug(`onSunseekerNotice: ${JSON.stringify(cleanup)}`);
+        if (cleanup) {
+            this.notice[sn] = cleanup;
+            //ToDo check settings
+            await this.json2iob.parse(`${sn}.notice`, cleanup, {
+                channelName: {
+                    en: "Notice Settings",
+                    de: "Benachrichtigungseinstellungen",
+                    ru: "Уведомление о настройках",
+                    pt: "Configurações de aviso",
+                    nl: "Meldingsinstellingen",
+                    fr: "Paramètres de notification",
+                    it: "Impostazioni notifiche",
+                    es: "Configuración de avisos",
+                    pl: "Ustawienia powiadomień",
+                    uk: "Налаштування сповіщень",
+                    "zh-cn": "通知设置",
+                },
+                forceIndex: true,
+                write: true,
+            });
+            const path = `${sn}.notice`;
+            if (!this.createObjectDone[path] && this.sunseeker) {
+                this.createObjectDone[path] = true;
+                const common = {
+                    name: {
+                        en: "Notice Settings",
+                        de: "Benachrichtigungseinstellungen",
+                        ru: "Уведомление о настройках",
+                        pt: "Configurações de aviso",
+                        nl: "Meldingsinstellingen",
+                        fr: "Paramètres de notification",
+                        it: "Impostazioni notifiche",
+                        es: "Configuración de avisos",
+                        pl: "Ustawienia powiadomień",
+                        uk: "Налаштування сповіщень",
+                        "zh-cn": "通知设置",
+                    },
+                    icon: "img/notice.png",
+                };
+                await this.sunseeker.createDataPoint(
+                    `${this.namespace}.${sn}.notice`,
+                    common,
+                    "channel",
+                    null,
+                    true,
+                    null,
+                );
+            }
+        }
+    }
+
+    async onSunseekerMultiZigZag({ sn, data, first }) {
+        if (first) {
+            this.log.debug(sn);
+            this.log.debug(JSON.stringify(data));
+            //ToDo zigzag
+        }
     }
 
     async onSunseekerStatus({ sn, status, settings }) {
@@ -622,27 +829,12 @@ class SunseekerAdapter extends utils.Adapter {
         return out;
     }
 
-    onSunseekerSetMqtt({ sn, data, id }) {
-        if (!this.firstStart[sn]) {
-            this.log.debug(`ID: ${id}`);
-            if (id === "getDevAllProperty") {
-                this.firstStart[sn] = true;
-                this.addWriteable(sn, data);
-            } else {
-                this.setSettings(sn, data);
-            }
-        } else {
-            this.setSettings(sn, data);
-        }
-        if (id === "getDevAllProperty") {
-            if (this.sunseeker) {
-                this.sunseeker.setScheduleInfo(sn, data);
-            }
-        }
-    }
-
-    onSunseekerMqtt({ sn, data }) {
+    onSunseekerMqtt({ sn, data, id }) {
         if (!data) {
+            return;
+        }
+        if (id == "device_pos") {
+            this.setMowerRaw(sn, data);
             return;
         }
         if (data.time && typeof data.time === "object" && data.time !== null) {
@@ -654,41 +846,43 @@ class SunseekerAdapter extends utils.Adapter {
             if (data.time_custom.time && typeof data.time_custom.time === "object" && data.time_custom.time !== null) {
                 const time_schedule2 = Object.assign({}, data);
                 this.cleanUpCalendar(sn, time_schedule2.time_custom, 1);
-                delete data.time;
+                delete data.time_custom;
             } else {
                 const time_schedule_custom = Object.assign({}, data);
                 this.cleanUpCalendar(sn, time_schedule_custom, 2);
                 delete data.time_custom;
             }
         }
+        if (data.file && typeof data.event_code === "number") {
+            const data_file = {};
+            data_file[`file_${data.event_code}`] = data;
+            this.setMowerRaw(sn, data_file);
+            return;
+        }
+        if (id == "setDivideArea") {
+            const data_area = {
+                area_info: {
+                    map_id: data.area_info[0].map_id,
+                    vertexs: data.area_info[0].vertexs,
+                },
+            };
+            this.setMowerRaw(sn, data_area);
+            return;
+        }
+        if (id == "report_notice") {
+            const notice = {
+                notice: data,
+            };
+            this.setMowerRaw(sn, notice);
+            return;
+        }
         const cleanup = this.removeNull(data);
-        this.json2iob.parse(`${sn}.mower_raw`, cleanup, {
-            channelName: {
-                en: "All data from cloud and mqtt",
-                de: "Alle Daten aus der Cloud und MQTT",
-                ru: "Все данные поступают из облака и MQTT.",
-                pt: "Todos os dados da nuvem e do MQTT",
-                nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
-                fr: "Toutes les données proviennent du cloud et de MQTT.",
-                it: "Tutti i dati dal cloud e MQTT",
-                es: "Todos los datos provienen de la nube y MQTT.",
-                pl: "Wszystkie dane z chmury i MQTT",
-                uk: "Всі дані з хмари та mqtt",
-                "zh-cn": "所有数据均来自云端和 MQTT",
-            },
-            forceIndex: true,
-            roles: {
-                lat: "value.gps.latitude",
-                lng: "value.gps.longitude",
-                picUrl: "text.url",
-                url: "text.url",
-            },
-            states: this.statesForDevice(sn),
-        });
+        this.setMowerRaw(sn, cleanup);
         const path = `${sn}.settings.plan_angle`;
         if (!this.createObjectDone[path]) {
             this.createObjectDone[path] = true;
             if (cleanup.plan_angle && cleanup.plan_angle.multi_zigzag_angles != null && this.sunseeker) {
+                //ToDo change to onSunseekerMultiZigZag
                 const states = [];
                 states.push(0);
                 if (Object.keys(cleanup.plan_angle.multi_zigzag_angles).length > 0) {
@@ -729,6 +923,52 @@ class SunseekerAdapter extends utils.Adapter {
                 }
             }
         }
+        if (!this.firstStart[sn]) {
+            this.log.debug(`ID: ${id}`);
+            if (id === "getDevAllProperty") {
+                this.firstStart[sn] = true;
+                this.addWriteable(sn, data);
+            } else {
+                this.setSettings(sn, data);
+            }
+        } else {
+            this.setSettings(sn, data);
+        }
+        if (id === "getDevAllProperty") {
+            if (this.sunseeker) {
+                this.sunseeker.setScheduleInfo(sn, data);
+            }
+        }
+    }
+
+    /**
+     * @param {string} sn
+     * @param {any} data
+     */
+    setMowerRaw(sn, data) {
+        this.json2iob.parse(`${sn}.mower_raw`, data, {
+            channelName: {
+                en: "All data from cloud and mqtt",
+                de: "Alle Daten aus der Cloud und MQTT",
+                ru: "Все данные поступают из облака и MQTT.",
+                pt: "Todos os dados da nuvem e do MQTT",
+                nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
+                fr: "Toutes les données proviennent du cloud et de MQTT.",
+                it: "Tutti i dati dal cloud e MQTT",
+                es: "Todos los datos provienen de la nube y MQTT.",
+                pl: "Wszystkie dane z chmury i MQTT",
+                uk: "Всі дані з хмари та mqtt",
+                "zh-cn": "所有数据均来自云端和 MQTT",
+            },
+            forceIndex: true,
+            roles: {
+                lat: "value.gps.latitude",
+                lng: "value.gps.longitude",
+                picUrl: "text.url",
+                url: "text.url",
+            },
+            states: this.statesForDevice(sn),
+        });
     }
 
     /**
@@ -798,6 +1038,7 @@ class SunseekerAdapter extends utils.Adapter {
                 await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
             }
             this.setState(`${sn}.map.backup`, JSON.stringify(payload), true);
+            this.updateMaps(sn, payload);
             return;
         }
         if (kind === "mapData" || kind === "pathData") {
@@ -943,29 +1184,416 @@ class SunseekerAdapter extends utils.Adapter {
         if (data && typeof data === "string" && data.startsWith("{")) {
             try {
                 const map_info = JSON.parse(data);
+                /**
+                if (map_info && this.sunseeker) {
+                    if (map_info.region_channel) {
+                        if (!Array.isArray(map_info.region_channel)) {
+                            return;
+                        }
+                        if (map_info.region_channel.length > 0) {
+                            this.regionsCounter[sn].passage = map_info.region_channel.length;
+                            await this.json2iob.parse(`${sn}.map.passages`, map_info.region_channel, {
+                                channelName: {
+                                    en: "Passage areas",
+                                    de: "Durchgangsbereiche",
+                                    ru: "Проходы",
+                                    pt: "Áreas de passagem",
+                                    nl: "Doorgangsgebieden",
+                                    fr: "Zones de passage",
+                                    it: "aree di passaggio",
+                                    es: "Zonas de paso",
+                                    pl: "Obszary przejść",
+                                    uk: "Прохідні зони",
+                                    "zh-cn": "通道区域",
+                                },
+                                forceIndex: true,
+                            });
+                            const lang_p = {
+                                en: "Passage area delete",
+                                de: "Durchgangsbereich löschen",
+                                ru: "Удалить область прохода",
+                                pt: "área de passagem excluir",
+                                nl: "Doorgangsgebied verwijderen",
+                                fr: "Supprimer la zone de passage",
+                                it: "Eliminazione dell'area di passaggio",
+                                es: "Eliminar área de pasaje",
+                                pl: "Usunięcie obszaru przejścia",
+                                uk: "Видалення області проходу",
+                                "zh-cn": "通道区域删除",
+                            };
+                            this.sunseeker.addDeleteObject(sn, map_info.region_channel, "passages", "passage", lang_p);
+                        } else {
+                            if (this.regionsCounter[sn].passage > 0) {
+                                this.regionsCounter[sn].passage = 0;
+                                await this.delObjectAsync(`${this.namespace}.${sn}.map.passages`, {
+                                    recursive: true,
+                                });
+                            }
+                        }
+                    }
+                    if (map_info.region_forbidden) {
+                        if (!Array.isArray(map_info.region_forbidden)) {
+                            return;
+                        }
+                        if (map_info.region_forbidden.length > 0) {
+                            this.regionsCounter[sn].forbidden = map_info.region_forbidden.length;
+                            await this.json2iob.parse(`${sn}.map.forbidden`, map_info.region_forbidden, {
+                                channelName: {
+                                    en: "Forbidden areas",
+                                    de: "Verbotene Bereiche",
+                                    ru: "Запретные зоны",
+                                    pt: "Áreas proibidas",
+                                    nl: "Verboden gebieden",
+                                    fr: "Zones interdites",
+                                    it: "Aree proibite",
+                                    es: "Zonas prohibidas",
+                                    pl: "Zakazane obszary",
+                                    uk: "Заборонені зони",
+                                    "zh-cn": "禁区",
+                                },
+                                forceIndex: true,
+                            });
+                            const lang_f = {
+                                en: "Forbidden area delete",
+                                de: "Verbotener Bereich löschen",
+                                ru: "Удалить запрещенную область",
+                                pt: "Excluir área proibida",
+                                nl: "Verboden gebied verwijderen",
+                                fr: "Supprimer la zone interdite",
+                                it: "Eliminazione dell'area proibita",
+                                es: "Eliminar zona prohibida",
+                                pl: "Usuwanie obszaru zabronionego",
+                                uk: "Видалення забороненої зони",
+                                "zh-cn": "禁区删除",
+                            };
+                            this.sunseeker.addDeleteObject(
+                                sn,
+                                map_info.region_forbidden,
+                                "forbidden",
+                                "forbidden",
+                                lang_f,
+                            );
+                        } else {
+                            if (this.regionsCounter[sn].forbidden > 0) {
+                                this.regionsCounter[sn].forbidden = 0;
+                                await this.delObjectAsync(`${this.namespace}.${sn}.map.forbidden`, {
+                                    recursive: true,
+                                });
+                            }
+                        }
+                    }
+                    if (map_info.region_obstacle) {
+                        if (!Array.isArray(map_info.region_obstacle)) {
+                            return;
+                        }
+                        if (map_info.region_obstacle.length > 0) {
+                            this.regionsCounter[sn].obstacle = map_info.region_obstacle.length;
+                            await this.json2iob.parse(`${sn}.map.obstacles`, map_info.region_obstacle, {
+                                channelName: {
+                                    en: "Obstacles",
+                                    de: "Hindernisse",
+                                    ru: "Препятствия",
+                                    pt: "Obstáculos",
+                                    nl: "Obstakels",
+                                    fr: "Obstacles",
+                                    it: "Ostacoli",
+                                    es: "Obstáculos",
+                                    pl: "Przeszkody",
+                                    uk: "Перешкоди",
+                                    "zh-cn": "障碍",
+                                },
+                                forceIndex: true,
+                            });
+                            const lang_o = {
+                                en: "Obstacle area delete",
+                                de: "Hindernisbereich löschen",
+                                ru: "Удалить зону препятствий",
+                                pt: "área de obstáculo excluída",
+                                nl: "Obstakelgebied verwijderen",
+                                fr: "Supprimer la zone d'obstacles",
+                                it: "Eliminare l'area degli ostacoli",
+                                es: "Eliminar zona de obstáculos",
+                                pl: "Usuwanie obszaru przeszkód",
+                                uk: "Видалення зони перешкоди",
+                                "zh-cn": "障碍区域删除",
+                            };
+                            this.sunseeker.addDeleteObject(
+                                sn,
+                                map_info.region_obstacle,
+                                "obstacles",
+                                "obstacle",
+                                lang_o,
+                            );
+                        } else {
+                            if (this.regionsCounter[sn].obstacle > 0) {
+                                this.regionsCounter[sn].obstacle = 0;
+                                await this.delObjectAsync(`${this.namespace}.${sn}.map.obstacles`, {
+                                    recursive: true,
+                                });
+                            }
+                        }
+                    }
+                    if (map_info.region_placed_blank) {
+                        if (!Array.isArray(map_info.region_placed_blank)) {
+                            return;
+                        }
+                        if (map_info.region_placed_blank.length > 0) {
+                            this.regionsCounter[sn].placed = map_info.region_placed_blank.length;
+                            await this.json2iob.parse(`${sn}.map.placed_blank`, map_info.region_placed_blank, {
+                                channelName: {
+                                    en: "Placed blank areas",
+                                    de: "Platzierte leere Bereiche",
+                                    ru: "Заполненные пустые области",
+                                    pt: "Áreas em branco inseridas",
+                                    nl: "Ingevulde lege gebieden",
+                                    fr: "Zones vides placées",
+                                    it: "Posizionamento di aree vuote",
+                                    es: "Se colocaron áreas en blanco",
+                                    pl: "Umieszczono puste obszary",
+                                    uk: "Розміщені порожні області",
+                                    "zh-cn": "放置空白区域",
+                                },
+                                forceIndex: true,
+                            });
+                            const lang_pl = {
+                                en: "Placed blank area delete",
+                                de: "Platzierten leeren Bereich löschen",
+                                ru: "Размещено пустое место, удалить",
+                                pt: "Área em branco excluída",
+                                nl: "Leeg gebied verwijderd",
+                                fr: "Supprimer la zone vide insérée",
+                                it: "Area vuota inserita elimina",
+                                es: "Área en blanco colocada eliminar",
+                                pl: "Umieszczony pusty obszar usuń",
+                                uk: "Видалення розміщеної порожньої області",
+                                "zh-cn": "放置空白区域删除",
+                            };
+                            this.sunseeker.addDeleteObject(
+                                sn,
+                                map_info.region_placed_blank,
+                                "placed",
+                                "placed",
+                                lang_pl,
+                            );
+                        } else {
+                            if (this.regionsCounter[sn].placed > 0) {
+                                this.regionsCounter[sn].placed = 0;
+                                await this.delObjectAsync(`${this.namespace}.${sn}.map.placed_blank`, {
+                                    recursive: true,
+                                });
+                            }
+                        }
+                    }
+                    if (map_info.region_blank) {
+                        if (!Array.isArray(map_info.region_blank)) {
+                            return;
+                        }
+                        if (map_info.region_blank.length > 0) {
+                            this.regionsCounter[sn].blaank = map_info.region_blank.length;
+                            await this.json2iob.parse(`${sn}.map.blanks`, map_info.region_blank, {
+                                channelName: {
+                                    en: "Blank areas",
+                                    de: "Leere Bereiche",
+                                    ru: "Пустые участки",
+                                    pt: "Áreas em branco",
+                                    nl: "Lege gebieden",
+                                    fr: "Zones vides",
+                                    it: "Area vuota",
+                                    es: "Áreas en blanco",
+                                    pl: "Puste obszary",
+                                    uk: "Пусті області",
+                                    "zh-cn": "空白区域",
+                                },
+                                forceIndex: true,
+                            });
+                            const lang_b = {
+                                en: "Blank area delete",
+                                de: "Leeren Bereich löschen",
+                                ru: "Удалить пустую область",
+                                pt: "Excluir área em branco",
+                                nl: "Leeg gebied verwijderen",
+                                fr: "Supprimer la zone vide",
+                                it: "area vuota elimina",
+                                es: "eliminar área en blanco",
+                                pl: "Usuń pusty obszar",
+                                uk: "Видалення порожньої області",
+                                "zh-cn": "空白区域删除",
+                            };
+                            this.sunseeker.addDeleteObject(sn, map_info.region_placed_blank, "blanks", "blank", lang_b);
+                        } else {
+                            if (this.regionsCounter[sn].blank > 0) {
+                                this.regionsCounter[sn].blank = 0;
+                                await this.delObjectAsync(`${this.namespace}.${sn}.map.blanks`, {
+                                    recursive: true,
+                                });
+                            }
+                        }
+                    }
+                }
+                 */
                 if (map_info && map_info.region_work) {
                     if (!Array.isArray(map_info.region_work)) {
                         return;
                     }
-                    await this.json2iob.parse(`${sn}.map.zonen`, map_info.region_work, {
+                    if (this.sunseeker) {
+                        this.regionId[sn] = [];
+                        const meta = this.sunseeker.deviceMeta[sn];
+                        for (const region of map_info.region_work) {
+                            if (map_info.update_time) {
+                                region["mapId"] = map_info.update_time;
+                            } else {
+                                region["mapId"] = meta.mapid;
+                            }
+                            this.regionId[sn].push(region.id);
+                        }
+                        //ToDo search active region_id
+                        await this.setState(`${this.namespace}.${sn}.schedule.zones_available`, {
+                            val: JSON.stringify(this.regionId[sn]),
+                            ack: true,
+                        });
+                    }
+                    await this.json2iob.parse(`${sn}.map.zones`, map_info.region_work, {
+                        channelName: {
+                            en: "Zones",
+                            de: "Zonen",
+                            ru: "Зоны",
+                            pt: "Zonas",
+                            nl: "Zones",
+                            fr: "Zones",
+                            it: "Zone",
+                            es: "Zonas",
+                            pl: "Strefy",
+                            uk: "Зони",
+                            "zh-cn": "Zones",
+                        },
                         forceIndex: true,
                     });
                     const zone = Object.keys(map_info.region_work).length;
-                    const obj = await this.getChannelsAsync();
-                    const zone_obj = obj.filter(
-                        z =>
-                            z._id == `${this.namespace}.${sn}.map.zonen.01` ||
-                            z._id == `${this.namespace}.${sn}.map.zonen.02` ||
-                            z._id == `${this.namespace}.${sn}.map.zonen.03` ||
-                            z._id == `${this.namespace}.${sn}.map.zonen.04`,
-                    );
-                    const zonen = Object.keys(zone_obj).length;
-                    if (zonen > zone) {
-                        let count = zonen;
+                    const zone_obj = await this.loadChannels(sn, "map.zones.0");
+                    const zones = Object.keys(zone_obj).length;
+                    for (let a = 1; a <= zone; a++) {
+                        const path = `${sn}.map.zones.0${a}`;
+                        if (!this.createObjectDone[path] && this.sunseeker) {
+                            this.createObjectDone[path] = true;
+                            await this.extendObject(`${path}.name`, { common: { write: true } });
+                            if (zones < 4) {
+                                await this.setObjectNotExistsAsync(
+                                    `${this.namespace}.${path}.start_mowing_selected_area`,
+                                    {
+                                        type: "state",
+                                        common: {
+                                            name: {
+                                                en: "Start mowing selected area",
+                                                de: "Mit dem Mähen des ausgewählten Bereichs beginnen",
+                                                ru: "Начать косить выбранный участок",
+                                                pt: "Iniciar o corte na área selecionada",
+                                                nl: "Begin met het maaien van het geselecteerde gebied",
+                                                fr: "Commencer à tondre la zone sélectionnée",
+                                                it: "Inizia a falciare l'area selezionata",
+                                                es: "Empezar a cortar el césped en la zona seleccionada",
+                                                pl: "Rozpocznij koszenie wybranego obszaru",
+                                                uk: "Почати косіння вибраної ділянки",
+                                                "zh-cn": "Start mowing selected area",
+                                            },
+                                            type: "string",
+                                            role: "json",
+                                            write: true,
+                                            read: true,
+                                            def: JSON.stringify([]),
+                                        },
+                                        native: {},
+                                    },
+                                ).catch(error => {
+                                    this.log.error(`zones split: ${error.name}: ${error.message}`);
+                                });
+                                await this.setObjectNotExistsAsync(`${this.namespace}.${path}.split_zones`, {
+                                    type: "state",
+                                    common: {
+                                        name: {
+                                            en: "Work area split e.g. [[-1.269,-17.454], [-8.25, -18.668]]",
+                                            de: "Aufteilung des Arbeitsbereichs, z. B. [[-1,269, -17,454], [-8,25, -18,668]]",
+                                            ru: "Разделение рабочей области, например: [[-1,269; -17,454], [-8,25; -18,668]]",
+                                            pt: "Divisão da área de trabalho, por exemplo: [[-1,269; -17,454], [-8,25; -18,668]]",
+                                            nl: "Opgesplitst werkgebied, bijv. [[-1,269, -17,454], [-8,25, -18,668]]",
+                                            fr: "Division de la zone de travail, par exemple [[-1,269, -17,454], [-8,25, -18,668]]",
+                                            it: "Divisione dell'area di lavoro, ad esempio [[-1,269; -17,454], [-8,25; -18,668]]",
+                                            es: "División del área de trabajo, p. ej., [[-1,269; -17,454], [-8,25; -18,668]]",
+                                            pl: "Podział obszaru roboczego, np. [[-1,269; -17,454], [-8,25; -18,668]]",
+                                            uk: "Розділення робочої області, наприклад: [[-1,269; -17,454], [-8,25; -18,668]]",
+                                            "zh-cn": "Work area split e.g. [[-1.269,-17.454], [-8.25, -18.668]]",
+                                        },
+                                        type: "string",
+                                        role: "json",
+                                        write: true,
+                                        read: true,
+                                        def: JSON.stringify([]),
+                                    },
+                                    native: {},
+                                }).catch(error => {
+                                    this.log.error(`zones split: ${error.name}: ${error.message}`);
+                                });
+                            } else {
+                                await this.delObjectAsync(`${this.namespace}.${path}.split_zones`, {
+                                    recursive: true,
+                                });
+                            }
+                            await this.extendObject(path, {
+                                common: {
+                                    name: {
+                                        en: `Zone ${a}`,
+                                        de: `Zone ${a}`,
+                                        ru: `Зона ${a}`,
+                                        pt: `Zona ${a}`,
+                                        nl: `Zone ${a}`,
+                                        fr: `Zone ${a}`,
+                                        it: `Zona ${a}`,
+                                        es: `Zona ${a}`,
+                                        pl: `Strefa ${a}`,
+                                        uk: `Зона ${a}`,
+                                        "zh-cn": `Zone ${a}`,
+                                    },
+                                },
+                            });
+                        }
+                    }
+                    if (zones > 1) {
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.zones.merge_zones`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Work area merge e.g. [1,2]",
+                                    de: "Arbeitsbereich zusammenführen, z. B. [1,2]",
+                                    ru: "Объединение рабочих областей, например [1,2]",
+                                    pt: "Unir a área de trabalho, por exemplo, [1,2]",
+                                    nl: "Werkgebied samenvoegen, bijv. [1,2]",
+                                    fr: "Fusionner la zone de travail, par exemple [1,2]",
+                                    it: "Unione dell'area di lavoro, ad esempio [1,2]",
+                                    es: "Área de trabajo de fusión, p. ej., [1,2]",
+                                    pl: "Połączenie obszarów roboczych, np. [1,2]",
+                                    uk: "Об’єднання робочої області, наприклад [1,2]",
+                                    "zh-cn": "Work area merge e.g. [1,2]",
+                                },
+                                type: "string",
+                                role: "json",
+                                write: true,
+                                read: true,
+                                def: JSON.stringify([]),
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`zones merge: ${error.name}: ${error.message}`);
+                        });
+                    } else {
+                        await this.delObjectAsync(`${this.namespace}.${sn}.map.zones.merge_zones`, {
+                            recursive: true,
+                        });
+                    }
+                    if (zones > zone) {
+                        let count = zones;
                         let save = 0;
-                        for (let a = zone; a <= zonen - 1; a++) {
-                            this.log.info(`delete zone: ${this.namespace}.${sn}.map.zonen.0${count}`);
-                            await this.delObjectAsync(`${this.namespace}.${sn}.map.zonen.0${count}`, {
+                        for (let a = zone; a <= zones - 1; a++) {
+                            this.log.info(`delete zone: ${this.namespace}.${sn}.map.zones.0${count}`);
+                            await this.delObjectAsync(`${this.namespace}.${sn}.map.zones.0${count}`, {
                                 recursive: true,
                             });
                             --count;
@@ -997,20 +1625,181 @@ class SunseekerAdapter extends utils.Adapter {
         }
         const eventsIdx = parts.indexOf("events");
         if (parts[eventsIdx + 1] === "eventUpdate") {
-            await this.sunseeker.getEvents(parts[eventsIdx - 1], 1, 10);
+            this.sunseeker.getEvents(parts[eventsIdx - 1], 1, 10);
             this.setState(id, { val: false, ack: true });
+            return;
+        } else if (parts[eventsIdx + 1] === "makeAllRead" && state.val) {
+            this.sunseeker.setMarkAllAsRead(parts[eventsIdx - 1]);
+            this.setState(id, { val: false, ack: true });
+            return;
+        }
+        const noticeIdx = parts.indexOf("notice");
+        if (parts[noticeIdx] === "notice") {
+            this.log.debug(JSON.stringify(this.notice));
+            const sn_notice = parts[noticeIdx - 1];
+            if (sn_notice && this.notice[sn_notice]) {
+                const noticeName = parts[noticeIdx + 1];
+                const sendJson = {};
+                if (noticeName && this.notice[sn_notice][noticeName] != null) {
+                    sendJson[noticeName] = state.val;
+                    this.setNotice(sn_notice, sendJson);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+            }
+            return;
+        }
+        const setIdx = parts.indexOf("map_settings");
+        if (parts[setIdx] === "map_settings") {
+            this.sunseeker.setLiveSettings(parts[setIdx - 2], state, parts[setIdx + 1]);
+            this.setState(id, { val: state.val, ack: true });
             return;
         }
         const mapIdx = parts.indexOf("map");
         const snr = parts[mapIdx - 1];
         if (parts[mapIdx + 1] === "livemap_update" && state && typeof state.val === "boolean") {
             this.sunseeker.setLiveMap(snr, state.val);
-            this.setState(id, { val: false, ack: true });
+            this.setState(id, { val: state.val, ack: true });
+            return;
+        }
+        if (parts[mapIdx + 3] === "start_mowing_selected_area" && state && typeof state.val === "string") {
+            this.startMowingSelectedArea(id, snr, state.val);
+            this.setState(id, { val: state.val, ack: true });
+            this.updateDeviceAfterStateChange(snr);
+            return;
+        }
+        if (parts[mapIdx + 2] === "merge_zones") {
+            this.mergeWorkArea(id, snr, "merge_zones", state);
+            this.setState(id, { val: state.val, ack: true });
+            this.updateDeviceAfterStateChange(snr);
+            return;
+        }
+        if (parts[mapIdx + 2] === "change_active_map_name") {
+            const mapId = await this.getStateAsync(`${snr}.map.zones.01.mapId`);
+            if (mapId && typeof mapId.val === "number") {
+                const map_id = {
+                    map_id: mapId.val,
+                };
+                this.sunseeker.setSettings(snr, state.val, "setMapName", "map_name", map_id);
+                this.setState(id, { val: state.val, ack: true });
+                this.updateDeviceAfterStateChange(snr);
+            }
+            return;
+        }
+        if (parts[mapIdx + 2] === "save_active_map") {
+            const mapId = await this.getStateAsync(`${snr}.map.zones.01.mapId`);
+            if (mapId && typeof mapId.val === "number" && mapId.val) {
+                this.sunseeker.sendCommand(snr, "backup_map", mapId.val);
+                this.setState(id, { val: false, ack: true });
+                this.updateDeviceAfterStateChange(snr);
+            }
+            return;
+        }
+        if (parts[mapIdx + 2] === "delete_active_map") {
+            const del = await this.getStateAsync(`${snr}.map.zones.delete_active_map_select`);
+            if (del && del.val) {
+                this.setState(`${snr}.map.zones.delete_active_map_select`, { val: false, ack: true });
+                const mapId = await this.getStateAsync(`${snr}.map.zones.01.mapId`);
+                if (mapId && typeof mapId.val === "number" && mapId.val) {
+                    this.sunseeker.sendCommand(snr, "backup_delete_active", mapId.val);
+                    this.setState(id, { val: false, ack: true });
+                    this.updateDeviceAfterStateChange(snr);
+                }
+            }
+            return;
+        }
+        if (parts[mapIdx + 2] === "delete_active_map_select") {
+            this.setState(id, { val: state.val, ack: true });
+            return;
+        }
+        if (parts[mapIdx + 3] === "split_zones") {
+            const lastIndex = id.lastIndexOf(".");
+            if (lastIndex !== -1) {
+                const result = id.substring(0, lastIndex);
+                this.splitWorkArea(id, snr, result, "split_zones", state);
+                this.updateDeviceAfterStateChange(snr);
+                this.setState(id, { val: state.val, ack: true });
+            }
+            return;
+        }
+        if (parts[mapIdx + 3] === "mapName" && state && typeof state.val === "string") {
+            const lastIndex = id.lastIndexOf(".");
+            if (lastIndex !== -1) {
+                const result = id.substring(0, lastIndex);
+                const mapId = await this.getStateAsync(`${result}.mapId`);
+                if (mapId && typeof mapId.val === "number") {
+                    const map_id = {
+                        map_id: mapId.val,
+                    };
+                    this.sunseeker.setSettings(snr, state.val, "setMapName", "map_name", map_id);
+                    this.setState(id, { val: state.val, ack: true });
+                    this.updateDeviceAfterStateChange(snr);
+                }
+            }
+            return;
+        }
+        if (parts[mapIdx + 3] === "name" && state && typeof state.val === "string") {
+            const lastIndex = id.lastIndexOf(".");
+            if (lastIndex !== -1) {
+                const result = id.substring(0, lastIndex);
+                const zoneId = await this.getStateAsync(`${result}.id`);
+                if (zoneId && typeof zoneId.val === "number") {
+                    //const meta = this.sunseeker.deviceMeta[snr];
+                    /**
+                     * type = 0 region_workzone
+                     * type = 2 region_passage
+                     * type = 3 region_obstacle
+                     * type = 4 region_forbidden
+                     */
+                    const zoneId_id = {
+                        region_id: zoneId.val,
+                        region_name: state.val,
+                        region_type: 0,
+                    };
+                    this.sunseeker.setSettings(snr, state.val, "setRegionName", "region_name", zoneId_id);
+                    this.setState(id, { val: state.val, ack: true });
+                    this.updateDeviceAfterStateChange(snr);
+                }
+            }
+            return;
+        }
+        if (parts[mapIdx + 3] === "useThisMap" && state && typeof state.val === "string") {
+            const lastIndex = id.lastIndexOf(".");
+            if (lastIndex !== -1) {
+                const result = id.substring(0, lastIndex);
+                const mapId = await this.getStateAsync(`${result}.mapId`);
+                const used = await this.getStateAsync(`${result}.used`);
+                if (mapId && typeof mapId.val === "number" && used && typeof used.val === "boolean" && !used.val) {
+                    this.sunseeker.sendCommand(snr, "used", mapId.val);
+                    this.setState(id, { val: false, ack: true });
+                    this.updateDeviceAfterStateChange(snr);
+                }
+            }
+            return;
+        }
+        if (parts[mapIdx + 3] === "delete" && state && typeof state.val === "boolean") {
+            const lastIndex = id.lastIndexOf(".");
+            if (lastIndex !== -1) {
+                const result = id.substring(0, lastIndex);
+                const del = await this.getStateAsync(`${result}.delete_select`);
+                if (del && del.val) {
+                    this.setState(`${result}.delete_select`, { val: false, ack: true });
+                    const mapId = await this.getStateAsync(`${result}.mapId`);
+                    if (mapId && typeof mapId.val === "number") {
+                        this.sunseeker.sendCommand(snr, "backup_delete", mapId.val);
+                        this.setState(id, { val: false, ack: true });
+                        this.updateDeviceAfterStateChange(snr);
+                    }
+                }
+            }
+            return;
+        }
+        if (parts[mapIdx + 3] === "delete_select" && state && typeof state.val === "boolean") {
+            this.setState(id, { val: state.val, ack: true });
             return;
         }
         const ownIdx = parts.indexOf("expert");
         if (parts[ownIdx + 1] === "request" && state && typeof state.val === "string" && state.val.startsWith("{")) {
-            //this.sunseeker.ownRequest(parts[ownIdx - 1], state.val);
+            this.sunseeker.ownRequest(parts[ownIdx - 1], state.val);
             this.setState(id, { val: state.val, ack: true });
             return;
         }
@@ -1018,7 +1807,7 @@ class SunseekerAdapter extends utils.Adapter {
         if (scheduleIdx > 0 && parts[scheduleIdx + 1]) {
             const sn = parts[scheduleIdx - 1];
             const leaf = parts[scheduleIdx + 1];
-            if (leaf === "loadSchedule") {
+            if (leaf === "getSchedule") {
                 this.sunseeker.fetchAllProperties(sn);
                 this.setState(id, { val: false, ack: true });
                 return;
@@ -1032,14 +1821,14 @@ class SunseekerAdapter extends utils.Adapter {
                 }
                 return;
             }
-            if (leaf === "set") {
+            if (leaf === "setSchedule") {
                 this.collectSchedulePlan(sn);
                 this.setState(id, { val: false, ack: true });
                 return;
             }
             if (leaf === "schedule_time_work_repeat") {
                 if (typeof state.val === "boolean") {
-                    this.sunseeker.setSettings(sn, state.val, "setTimeWorkRepeat", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setTimeWorkRepeat", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
@@ -1056,6 +1845,8 @@ class SunseekerAdapter extends utils.Adapter {
                     const numberFormat = /^\d{4}$/;
                     if (numberFormat.test(state.val)) {
                         this.setState(id, { val: state.val, ack: true });
+                    } else {
+                        this.log.warn(`Wrong Pin format!! - ${state.val}`);
                     }
                 }
                 return;
@@ -1070,8 +1861,14 @@ class SunseekerAdapter extends utils.Adapter {
                                 this.sunseeker.changePin(sn, pin_old.val, state.val);
                                 this.setState(id, { val: "", ack: true });
                                 this.setState(`${sn}.settings.pin_old`, { val: "", ack: true });
+                            } else {
+                                this.log.warn(`Wrong old pin format!! - ${state.val}`);
                             }
+                        } else {
+                            this.log.warn(`Missing old pin!! - ${state.val}`);
                         }
+                    } else {
+                        this.log.warn(`Wrong new pin format!! - ${state.val}`);
                     }
                 }
                 return;
@@ -1093,28 +1890,56 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "night_work") {
                 if (typeof state.val === "boolean") {
-                    this.sunseeker.setSettings(sn, state.val, "setNightWork", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setNightWork", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "reset_bladeplate") {
+                if (typeof state.val === "boolean" && state.val) {
+                    this.sunseeker.sendCommand(sn, leaf, state.val);
+                    this.setState(id, { val: false, ack: true });
+                }
+                return;
+            }
+            if (leaf === "reset_blade") {
+                if (typeof state.val === "boolean" && state.val) {
+                    this.sunseeker.sendCommand(sn, leaf, state.val);
+                    this.setState(id, { val: false, ack: true });
+                }
+                return;
+            }
+            if (leaf === "reset_small_bladeplate") {
+                if (typeof state.val === "boolean" && state.val) {
+                    this.sunseeker.sendCommand(sn, leaf, state.val);
+                    this.setState(id, { val: false, ack: true });
+                }
+                return;
+            }
+            if (leaf === "reset_small_blade") {
+                if (typeof state.val === "boolean" && state.val) {
+                    this.sunseeker.sendCommand(sn, leaf, state.val);
+                    this.setState(id, { val: false, ack: true });
                 }
                 return;
             }
             if (leaf === "energy_saving_mode") {
                 if (typeof state.val === "boolean") {
-                    this.sunseeker.setSettings(sn, state.val, "setEnergySavingMode", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setEnergySavingMode", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
             }
             if (leaf === "follow_border_freq") {
                 if (typeof state.val === "number" && (state.val == 1 || state.val == 2 || state.val == 3)) {
-                    this.sunseeker.setSettings(sn, state.val, "setFollowBorderFreq", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setFollowBorderFreq", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
             }
             if (leaf === "recharge_mode") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1 || state.val == 2)) {
-                    this.sunseeker.setSettings(sn, state.val, "setRechargeMode", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setRechargeMode", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
@@ -1142,9 +1967,16 @@ class SunseekerAdapter extends utils.Adapter {
                 }
                 return;
             }
+            if (leaf === "auto_upgrade") {
+                if (typeof state.val === "boolean") {
+                    this.sunseeker.setAutoUpgrade(sn, state);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
             if (leaf === "dev_model") {
                 if (typeof state.val === "string" && state.val != "") {
-                    this.sunseeker.setSettings(sn, state.val, "setDevModel", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setDevModel", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
@@ -1171,35 +2003,42 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "work_touch_mode") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
-                    this.sunseeker.setSettings(sn, state.val, "setWorkTouchMode", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setWorkTouchMode", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
             }
             if (leaf === "auto_ride_edge_map_m") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
-                    this.sunseeker.setSettings(sn, state.val, "setAutoRideEdgeMapM", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setAutoRideEdgeMapM", leaf, null);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (leaf === "custom_flag") {
+                if (typeof state.val === "boolean") {
+                    this.sunseeker.setSettings(sn, state.val, "setCustomFlag", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
             }
             if (leaf === "first_along_border") {
                 if (typeof state.val === "boolean") {
-                    this.sunseeker.setSettings(sn, state.val, "setFirstAlongBorder", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setFirstAlongBorder", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
             }
             if (leaf === "dis_along_border") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
-                    this.sunseeker.setSettings(sn, state.val, "setDisAlongBorder", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setDisAlongBorder", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
             }
             if (leaf === "ai_sensitivity") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
-                    this.sunseeker.setSettings(sn, state.val, "setDisAlongBorder", leaf);
+                    this.sunseeker.setSettings(sn, state.val, "setDisAlongBorder", leaf, null);
                     this.setState(id, { val: state.val, ack: true });
                 }
                 return;
@@ -1208,10 +2047,7 @@ class SunseekerAdapter extends utils.Adapter {
                 const key = leaf === "bladeSpeed" ? "speed" : "height";
                 try {
                     await this.sunseeker.setBlade(sn, key, Number(state.val));
-                    this.updateDeviceBlade = this.setTimeout(
-                        () => this.sunseeker?.updateDevice(sn).catch(() => {}),
-                        1500,
-                    );
+                    this.updateDeviceAfterStateChange(sn);
                     this.setState(id, { val: state.val, ack: true });
                 } catch (err) {
                     this.log.error(`Blade-${key} for ${sn} failed: ${err.message}`);
@@ -1227,10 +2063,7 @@ class SunseekerAdapter extends utils.Adapter {
                             ? state.val
                             : (await this.getStateAsync(`${sn}.settings.rainDelayDuration`))?.val;
                     await this.sunseeker.setRain(sn, Boolean(flagVal), Math.round(Number(durVal) || 0));
-                    this.updateDeviceRain = this.setTimeout(
-                        () => this.sunseeker?.updateDevice(sn).catch(() => {}),
-                        1500,
-                    );
+                    this.updateDeviceAfterStateChange(sn);
                     this.setState(id, { val: state.val, ack: true });
                 } catch (err) {
                     this.log.error(`Rain delay for ${sn} failed: ${err.message}`);
@@ -1253,12 +2086,17 @@ class SunseekerAdapter extends utils.Adapter {
                 await this.sunseeker.updateDevice(sn);
             } else if (command === "refresh_property") {
                 await this.sunseeker.fetchInitialProperties();
+            } else if (command === "set_screen_durration") {
+                await this.sunseeker.sendCommand(sn, command, state.val);
+            } else if (command === "set_return_path") {
+                await this.sunseeker.sendCommand(sn, command, state.val);
+            } else if (command === "set_border_first") {
+                await this.sunseeker.sendCommand(sn, command, state.val);
+            } else if (command === "set_border_distance") {
+                await this.sunseeker.sendCommand(sn, command, state.val);
             } else {
                 await this.sunseeker.sendCommand(sn, command, state.val);
-                this.updateDeviceCommand = this.setTimeout(
-                    () => this.sunseeker?.updateDevice(sn).catch(() => {}),
-                    1500,
-                );
+                this.updateDeviceAfterStateChange(sn);
             }
             this.setState(id, { val: state.val, ack: true });
         } catch (err) {
@@ -1269,48 +2107,195 @@ class SunseekerAdapter extends utils.Adapter {
     /**
      * @param {string} sn
      * @param {any} data
+     */
+    async setNotice(sn, data) {
+        if (this.sunseeker) {
+            await this.sunseeker.setNotice(sn, data);
+            await this.sunseeker.getNotice(sn);
+        }
+    }
+
+    /**
+     * @param {string} sn
+     */
+    updateDeviceAfterStateChange(sn) {
+        this.updateDeviceStateChange = this.setTimeout(() => {
+            this.updateDeviceStateChange = null;
+            this.sunseeker?.updateDevice(sn).catch(() => {});
+        }, 1500);
+    }
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {string | undefined | null} state
+     */
+    async startMowingSelectedArea(id, sn, state) {
+        if (state && state.startsWith("[")) {
+            try {
+                const areas = JSON.parse(state);
+                const lastIndex = id.lastIndexOf(".");
+                if (lastIndex !== -1) {
+                    const result = id.substring(0, lastIndex);
+                    const area_id = await this.getStateAsync(`${result}.id`);
+                    if (area_id && typeof area_id.val === "number") {
+                        if (this.sunseeker) {
+                            const val = {
+                                area_info: [
+                                    {
+                                        map_id: area_id.val,
+                                        vertexs: areas,
+                                    },
+                                ],
+                            };
+                            await this.sunseeker.setSettings(sn, null, "setDivideArea", "divide_area", val);
+                            this.updateDeviceAfterStateChange(sn);
+                            this.setState(id, { val: JSON.stringify([]), ack: true });
+                        }
+                        return;
+                    }
+                    this.log.warn(`Wrong Id path - ${JSON.stringify(result)}`);
+                    return;
+                }
+                this.log.warn(`Wrong Id - ${id}`);
+                return;
+            } catch (e) {
+                this.log.error(`Error area ${e}`);
+                return;
+            }
+        }
+        this.log.warn(`Wrong format!`);
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {string} command
+     * @param {string} path
+     * @param {ioBroker.State | null | undefined} state
+     */
+    async splitWorkArea(id, sn, command, path, state) {
+        if (state && typeof state.val === "string" && state.val.startsWith("[")) {
+            try {
+                const areas = JSON.parse(state.val);
+                const area_id = await this.getStateAsync(`${path}.id`);
+                if (area_id && typeof area_id.val === "number") {
+                    if (this.sunseeker) {
+                        const val = {
+                            points: areas,
+                            region: area_id.val,
+                        };
+                        await this.sunseeker.sendCommand(sn, command, val);
+                        this.updateDeviceAfterStateChange(sn);
+                        this.setState(id, { val: JSON.stringify([]), ack: true });
+                    }
+                    return;
+                }
+                this.log.warn(`Wrong Id path - ${JSON.stringify(path)}`);
+                return;
+            } catch (e) {
+                this.log.error(`Error area merge ${e}`);
+                return;
+            }
+        }
+        this.log.warn(`Wrong format!`);
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {string} command
+     * @param {ioBroker.State | null | undefined} state
+     */
+    async mergeWorkArea(id, sn, command, state) {
+        if (state && typeof state.val === "string" && state.val.startsWith("[")) {
+            try {
+                const areas = JSON.parse(state.val);
+                const merge_areas = [];
+                if (Array.isArray(areas) && areas.length > 1 && areas.length < 5) {
+                    for (const area of areas) {
+                        const area_id = await this.getStateAsync(`${sn}.map.zones.0${area}.id`);
+                        if (area_id && typeof area_id.val === "number") {
+                            merge_areas.push(area_id.val);
+                        } else {
+                            this.log.warn(`Wrong Id - ${JSON.stringify(area)}`);
+                        }
+                    }
+                    if (merge_areas.length > 1) {
+                        if (this.sunseeker) {
+                            await this.sunseeker.sendCommand(sn, command, merge_areas);
+                            this.updateDeviceAfterStateChange(sn);
+                        }
+                        this.setState(id, { val: JSON.stringify([]), ack: true });
+                        return;
+                    }
+                    this.log.warn(`At least two areas must be specified - ${JSON.stringify(merge_areas)}`);
+                    return;
+                }
+                this.log.warn(`Wrong area format! - ${JSON.stringify(areas)}`);
+                return;
+            } catch (e) {
+                this.log.error(`Error area merge ${e}`);
+                return;
+            }
+        }
+        this.log.warn(`Wrong format!`);
+    }
+
+    /**
+     * @param {string} sn
+     * @param {any} data
      * @param {number} plan
      */
     async cleanUpCalendar(sn, data, plan) {
         this.log.debug(`cleanUpCalendar: ${plan} - ${JSON.stringify(data)}`);
-        const dayPeriod = {
-            1: "monday",
-            2: "tuesday",
-            3: "wednesday",
-            4: "thursday",
-            5: "friday",
-            6: "saturday",
-            0: "sunday",
+        const day_channel = {
+            1: "1_monday",
+            2: "2_tuesday",
+            3: "3_wednesday",
+            4: "4_thursday",
+            5: "5_friday",
+            6: "6_saturday",
+            0: "0_sunday",
         };
-        const schedule = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 0: false };
-        const schedule_empty = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 0: false };
-        const schedule_empty2 = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 0: false };
+        const schedule = { 0: false, 1: false, 2: false, 3: false, 4: false, 5: false, 6: false };
+        const schedule_empty = { 0: false, 1: false, 2: false, 3: false, 4: false, 5: false, 6: false };
+        const schedule_empty2 = { 0: false, 1: false, 2: false, 3: false, 4: false, 5: false, 6: false };
         const mower_schedule = plan == 1 ? data.time : data.time_custom;
         if (typeof mower_schedule === "object" && mower_schedule !== null) {
             if (!Array.isArray(mower_schedule)) {
                 return;
             }
             for (const d of mower_schedule) {
+                if (Object.keys(d).length < 4 || d.period == null) {
+                    return;
+                }
                 const day = d.period[0];
-                const mower_day_name = dayPeriod[day];
-                const mower_time = this.getTimeString(d.start, d.end);
-                let path = `${sn}.schedule.${mower_day_name}`;
+                const mower_time_start = this.getTimeString(d.start);
+                const mower_time_end = this.getTimeString(d.end);
+                let path_start = `${sn}.schedule.${day_channel[day]}_1.start`;
+                let path_end = `${sn}.schedule.${day_channel[day]}_1.end`;
+                let path = `${sn}.schedule.${day_channel[day]}_1`;
                 if (!schedule[day]) {
                     schedule[day] = true;
                     schedule_empty[day] = true;
                 } else {
-                    path = `${sn}.schedule.${mower_day_name}_2`;
+                    path_start = `${sn}.schedule.${day_channel[day]}_2.start`;
+                    path_end = `${sn}.schedule.${day_channel[day]}_2.end`;
                     schedule_empty2[day] = true;
+                    path = `${sn}.schedule.${day_channel[day]}_2`;
                 }
-                await this.setState(path, { val: mower_time, ack: true });
+                await this.setState(path_start, { val: mower_time_start, ack: true });
+                await this.setState(path_end, { val: mower_time_end, ack: true });
+                await this.setScheduleData(path, d);
             }
         }
         if (typeof data.pause === "boolean") {
-            await this.setState(`${sn}.schedule.pause`, { val: data.pause, ack: true });
+            await this.setState(`${sn}.schedule.pauseSchedule`, { val: data.pause, ack: true });
         }
         for (const d in schedule_empty) {
             if (!schedule_empty[d]) {
-                await this.setState(`${sn}.schedule.${dayPeriod[d]}`, { val: "", ack: true });
+                await this.setState(`${sn}.schedule.${day_channel[d]}_1.start`, { val: "", ack: true });
+                await this.setState(`${sn}.schedule.${day_channel[d]}_1.end`, { val: "", ack: true });
             }
         }
         if (this.sunseeker) {
@@ -1318,7 +2303,14 @@ class SunseekerAdapter extends utils.Adapter {
             if (meta && (meta.modelClass === "S" || meta.modelClass === "X")) {
                 for (const d in schedule_empty2) {
                     if (!schedule_empty2[d]) {
-                        await this.setState(`${sn}.schedule.${dayPeriod[d]}_2`, { val: "", ack: true });
+                        await this.setState(`${sn}.schedule.${day_channel[d]}_2.start`, {
+                            val: "",
+                            ack: true,
+                        });
+                        await this.setState(`${sn}.schedule.${day_channel[d]}_2.end`, {
+                            val: "",
+                            ack: true,
+                        });
                     }
                 }
             }
@@ -1327,16 +2319,35 @@ class SunseekerAdapter extends utils.Adapter {
 
     /**
      * @param {number} start
-     * @param {number} end
-     * @returns {string} hh:mm-hh:mm
+     * @returns {string} hh:mm
      */
-    getTimeString(start, end) {
+    getTimeString(start) {
         const utcStart = new Date(start * 1000);
-        const start_time = `${`0${utcStart.getUTCHours()}`.slice(-2)}:${`0${utcStart.getUTCMinutes()}`.slice(-2)}`;
-        const utcEnd = new Date(end * 1000);
-        const end_time = `${`0${utcEnd.getUTCHours()}`.slice(-2)}:${`0${utcEnd.getUTCMinutes()}`.slice(-2)}`;
-        return `${start_time}-${end_time}`;
+        return `${`0${utcStart.getUTCHours()}`.slice(-2)}:${`0${utcStart.getUTCMinutes()}`.slice(-2)}`;
     }
+
+    /**
+     * @param {string} path
+     * @param {any} data
+     */
+    async setScheduleData(path, data) {
+        if (typeof data.active === "boolean") {
+            await this.setState(`${path}.active`, { val: data.active, ack: true });
+        }
+        if (typeof data.region_id === "object") {
+            await this.setState(`${path}.zones`, { val: JSON.stringify(data.region_id), ack: true });
+        }
+        if (typeof data.unlock === "boolean") {
+            await this.setState(`${path}.unlock`, { val: data.unlock, ack: true });
+        }
+        if (typeof data.need_fllow_boader === "boolean") {
+            await this.setState(`${path}.need_follow_border`, { val: data.need_fllow_boader, ack: true });
+        }
+        if (typeof data.work_order === "number") {
+            await this.setState(`${path}.work_order`, { val: data.work_order, ack: true });
+        }
+    }
+
     /**
      * @param {string} sn
      */
@@ -1345,19 +2356,28 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         const meta = this.sunseeker.deviceMeta[sn];
-        const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+        const days = [1, 2, 3, 4, 5, 6, 0];
+        const day_channel = {
+            1: "1_monday",
+            2: "2_tuesday",
+            3: "3_wednesday",
+            4: "4_thursday",
+            5: "5_friday",
+            6: "6_saturday",
+            0: "0_sunday",
+        };
         const plan = {};
         const plan2 = {};
         try {
             for (const day of days) {
-                const st = await this.getStateAsync(`${sn}.schedule.${day}`);
-                plan[day] = st && st.val && st.val != "" ? String(st.val) : "";
+                plan[day_channel[day]] = {};
+                await this.getScheduleData(sn, plan, day_channel[day], 1);
                 if (meta && (meta.modelClass === "S" || meta.modelClass === "X")) {
-                    const st2 = await this.getStateAsync(`${sn}.schedule.${day}_2`);
-                    plan2[day] = st2 && st2.val && st2.val != "" ? String(st2.val) : "";
+                    plan2[day_channel[day]] = {};
+                    await this.getScheduleData(sn, plan2, day_channel[day], 2);
                 }
             }
-            const pauseSt = await this.getStateAsync(`${sn}.schedule.pause`);
+            const pauseSt = await this.getStateAsync(`${sn}.schedule.pauseSchedule`);
             plan.pause = !!(pauseSt && pauseSt.val);
             this.log.debug(`collectSchedulePlan 1: ${JSON.stringify(plan)}`);
             this.log.debug(`collectSchedulePlan 2: ${JSON.stringify(plan2)}`);
@@ -1365,6 +2385,46 @@ class SunseekerAdapter extends utils.Adapter {
             this.updateDeviceSet = this.setTimeout(() => this.sunseeker?.updateDevice(sn).catch(() => {}), 1500);
         } catch (err) {
             this.log.error(`Schedule for ${sn} failed: ${err.message}`);
+        }
+    }
+
+    async getScheduleData(sn, plan, schedule, d_time) {
+        const st = await this.getStateAsync(`${sn}.schedule.${schedule}_${d_time}.start`);
+        const ste = await this.getStateAsync(`${sn}.schedule.${schedule}_${d_time}.end`);
+        if (st && st.val && st.val != "" && ste && ste.val && ste.val != "") {
+            plan[schedule].time = `${String(st.val)}-${String(ste.val)}`;
+        } else {
+            plan[schedule].time = "";
+        }
+        const ul = await this.getStateAsync(`${sn}.schedule.${schedule}_${d_time}.unlock`);
+        if (ul && typeof ul.val === "boolean") {
+            plan[schedule].unlock = ul.val;
+        } else {
+            plan[schedule].unlock = true;
+        }
+        const zs = await this.getStateAsync(`${sn}.schedule.${schedule}_${d_time}.zones`);
+        if (zs && typeof zs.val === "string" && zs.val.startsWith("[")) {
+            plan[schedule].zone = JSON.parse(zs.val);
+        } else {
+            plan[schedule].zone = [];
+        }
+        const ac = await this.getStateAsync(`${sn}.schedule.${schedule}_${d_time}.active`);
+        if (ac && typeof ac.val === "boolean") {
+            plan[schedule].active = ac.val;
+        } else {
+            plan[schedule].active = true;
+        }
+        const wo = await this.getStateAsync(`${sn}.schedule.${schedule}_${d_time}.work_order`);
+        if (wo && typeof wo.val === "number") {
+            plan[schedule].order = wo.val;
+        } else {
+            plan[schedule].order = 0;
+        }
+        const fb = await this.getStateAsync(`${sn}.schedule.${schedule}_${d_time}.need_follow_border`);
+        if (fb && typeof fb.val === "boolean") {
+            plan[schedule].border = fb.val;
+        } else {
+            plan[schedule].border = false;
         }
     }
 
@@ -1387,6 +2447,353 @@ class SunseekerAdapter extends utils.Adapter {
             }
             return value;
         });
+    }
+
+    /**
+     * @param {string} sn
+     * @param {string} path
+     */
+    async loadChannels(sn, path) {
+        const obj = await this.getChannelsAsync();
+        return obj.filter(m => m._id.includes(`${this.namespace}.${sn}.${path}`));
+    }
+
+    /**
+     * @param {string} sn
+     * @param {any} maps
+     */
+    async updateMaps(sn, maps) {
+        const map_new = Object.keys(maps).length;
+        if (!this.availableMaps) {
+            this.availableMaps = await this.loadChannels(sn, "map.maps.0");
+        }
+        const map_obj = this.availableMaps;
+        const map_old = Object.keys(map_obj).length;
+        if (map_old > map_new) {
+            let count = map_old;
+            let save = 0;
+            for (let a = map_new; a <= map_old - 1; a++) {
+                this.log.info(`delete zone: ${this.namespace}.${sn}.map.maps.0${count}`);
+                await this.delObjectAsync(`${this.namespace}.${sn}.map.maps.0${count}`, {
+                    recursive: true,
+                });
+                --count;
+                ++save;
+                if (save > 10) {
+                    break;
+                }
+            }
+            this.availableMaps = await this.loadChannels(sn, "map.maps.0");
+        }
+        await this.json2iob.parse(`${sn}.map.maps`, maps, {
+            channelName: {
+                en: "Maps",
+                de: "Karten",
+                ru: "Карты",
+                pt: "Mapas",
+                nl: "Kaarten",
+                fr: "Cartes",
+                it: "Mappe",
+                es: "Mapas",
+                pl: "Mapy",
+                uk: "Карти",
+                "zh-cn": "地图",
+            },
+            forceIndex: true,
+            roles: {
+                mapUrl: "text.url",
+                thumbnailUrl: "text.url",
+            },
+        });
+        let common;
+        let path = "";
+        let count = 1;
+        let used = false;
+        let mapName = "";
+        for (const map of maps) {
+            if (map.used) {
+                used = true;
+                mapName = map.mapName;
+            }
+            path = `${sn}.map.maps`;
+            if (!this.createObjectDone[path] && this.sunseeker) {
+                this.createObjectDone[path] = true;
+                common = {
+                    icon: "img/map.png",
+                };
+                await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "channel", null, true, null);
+            }
+            path = `${sn}.map.maps.0${count}`;
+            if (!this.createObjectDone[path] && this.sunseeker) {
+                this.createObjectDone[path] = true;
+                common = {
+                    name: map.mapName,
+                    desc: "Create by Adapter",
+                    icon: "img/map.png",
+                };
+                await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "channel", null, null, null);
+            }
+            if (!used) {
+                path = `${sn}.map.maps.0${count}.useThisMap`;
+                if (!this.createObjectDone[path] && this.sunseeker) {
+                    this.createObjectDone[path] = true;
+                    common = {
+                        name: {
+                            en: "Use map",
+                            de: "Karte verwenden",
+                            ru: "Используйте карту",
+                            pt: "Use o mapa",
+                            nl: "Gebruik de kaart",
+                            fr: "Utiliser la carte",
+                            it: "Utilizzare la mappa",
+                            es: "Utilice el mapa",
+                            pl: "Użyj mapy",
+                            uk: "Використати карту",
+                            "zh-cn": "使用地图",
+                        },
+                        type: "boolean",
+                        role: "button",
+                        read: false,
+                        write: true,
+                        def: false,
+                    };
+                    await this.sunseeker.createDataPoint(
+                        `${this.namespace}.${path}`,
+                        common,
+                        "state",
+                        null,
+                        null,
+                        null,
+                    );
+                }
+            } else {
+                await this.delObjectAsync(`${this.namespace}.${sn}.map.maps.0${count}.useThisMap`, {
+                    recursive: true,
+                });
+            }
+            path = `${sn}.map.maps.0${count}.delete`;
+            if (!this.createObjectDone[path] && this.sunseeker) {
+                this.createObjectDone[path] = true;
+                common = {
+                    name: {
+                        en: "Map backup delete finally",
+                        de: "Kartensicherung endgültig löschen",
+                        ru: "Наконец-то удалена резервная копия карты.",
+                        pt: "Excluir definitivamente o backup do mapa",
+                        nl: "Kaartback-up definitief verwijderen",
+                        fr: "Suppression définitive de la sauvegarde de la carte",
+                        it: "Eliminazione definitiva del backup della mappa",
+                        es: "Eliminar finalmente la copia de seguridad del mapa",
+                        pl: "Kopia zapasowa mapy została ostatecznie usunięta",
+                        uk: "Резервна копія карти остаточно видалена",
+                        "zh-cn": "地图备份最终删除",
+                    },
+                    type: "boolean",
+                    role: "button",
+                    read: false,
+                    write: true,
+                    def: false,
+                };
+                await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
+                common = {
+                    name: {
+                        en: "Set to True to delete. Then press the delete button",
+                        de: "Auf „Wahr“ stellen, um zu löschen. Anschließend die Löschtaste drücken.",
+                        ru: "Установите значение «Истина», чтобы удалить. Затем нажмите кнопку «Удалить».",
+                        pt: "Defina como Verdadeiro para excluir. Em seguida, pressione o botão Excluir.",
+                        nl: "Zet de optie op 'True' om te verwijderen. Druk vervolgens op de verwijderknop.",
+                        fr: "Cochez la case « Vrai » pour supprimer. Appuyez ensuite sur le bouton Supprimer.",
+                        it: "Imposta su True per eliminare. Quindi premi il pulsante Elimina.",
+                        es: "Establézcalo en Verdadero para eliminar. Luego presione el botón Eliminar.",
+                        pl: "Ustaw na Prawda, aby usunąć. Następnie naciśnij przycisk Usuń.",
+                        uk: "Встановіть значення True для видалення. Потім натисніть кнопку видалення",
+                        "zh-cn": "设置为“是”以删除。然后按删除按钮。",
+                    },
+                    type: "boolean",
+                    role: "switch",
+                    read: true,
+                    write: true,
+                    def: false,
+                };
+                await this.sunseeker.createDataPoint(
+                    `${this.namespace}.${sn}.map.maps.0${count}.delete_select`,
+                    common,
+                    "state",
+                    null,
+                    null,
+                    null,
+                );
+            }
+            path = `${sn}.map.maps.0${count}.mapName`;
+            if (!this.createObjectDone[path] && this.sunseeker) {
+                this.createObjectDone[path] = true;
+                common = {
+                    name: {
+                        en: "Change map name",
+                        de: "Kartennamen ändern",
+                        ru: "Изменить название карты",
+                        pt: "Alterar nome do mapa",
+                        nl: "Kaartnaam wijzigen",
+                        fr: "Changer le nom de la carte",
+                        it: "Cambia il nome della mappa",
+                        es: "Cambiar nombre del mapa",
+                        pl: "Zmień nazwę mapy",
+                        uk: "Змінити назву карти",
+                        "zh-cn": "更改地图名称",
+                    },
+                    type: "string",
+                    role: "state",
+                    read: true,
+                    write: true,
+                    def: "",
+                };
+                await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
+            }
+            ++count;
+        }
+        if (used && map_new < 5) {
+            path = `${sn}.map.zones.save_active_map`;
+            if (!this.createObjectDone[path] && this.sunseeker) {
+                this.createObjectDone[path] = true;
+                await this.setObjectNotExistsAsync(`${this.namespace}.${path}`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Save active map",
+                            de: "Aktive Karte speichern",
+                            ru: "Сохранить активную карту",
+                            pt: "Salvar mapa ativo",
+                            nl: "Actieve kaart opslaan",
+                            fr: "Sauvegarder la carte active",
+                            it: "Salva la mappa attiva",
+                            es: "Guardar mapa activo",
+                            pl: "Zapisz aktywną mapę",
+                            uk: "Зберегти активну карту",
+                            "zh-cn": "保存当前地图",
+                        },
+                        type: "boolean",
+                        role: "button",
+                        write: true,
+                        read: true,
+                        def: false,
+                    },
+                    native: {},
+                }).catch(error => {
+                    this.log.error(`save_active_map: ${error.name}: ${error.message}`);
+                });
+            }
+        } else {
+            await this.delObjectAsync(`${this.namespace}.${sn}.map.zones.save_active_map`, {
+                recursive: true,
+            });
+        }
+        if (map_new > 0) {
+            path = `${sn}.map.zones.delete_active_map`;
+            if (!this.createObjectDone[path] && this.sunseeker) {
+                this.createObjectDone[path] = true;
+                await this.setObjectNotExistsAsync(`${this.namespace}.${path}`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Delete active map",
+                            de: "Aktive Karte löschen",
+                            ru: "Удалить активную карту",
+                            pt: "Excluir mapa ativo",
+                            nl: "Actieve kaart verwijderen",
+                            fr: "Supprimer la carte active",
+                            it: "Elimina la mappa attiva",
+                            es: "Eliminar mapa activo",
+                            pl: "Usuń aktywną mapę",
+                            uk: "Видалити активну карту",
+                            "zh-cn": "删除活动地图",
+                        },
+                        type: "boolean",
+                        role: "button",
+                        write: true,
+                        read: true,
+                        def: false,
+                    },
+                    native: {},
+                }).catch(error => {
+                    this.log.error(`delete_active_map: ${error.name}: ${error.message}`);
+                });
+            }
+            path = `${sn}.map.zones.delete_active_map_select`;
+            if (!this.createObjectDone[path] && this.sunseeker) {
+                this.createObjectDone[path] = true;
+                await this.setObjectNotExistsAsync(`${this.namespace}.${path}`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Mark active map for deletion",
+                            de: "Aktive Karte zum Löschen markieren",
+                            ru: "Отметьте активную карту для удаления",
+                            pt: "Marcar mapa ativo para exclusão",
+                            nl: "Markeer actieve kaart voor verwijdering",
+                            fr: "Marquer la carte active pour suppression",
+                            it: "Contrassegna la mappa attiva per la cancellazione",
+                            es: "Marcar mapa activo para su eliminación",
+                            pl: "Oznacz aktywną mapę do usunięcia",
+                            uk: "Позначити активну карту для видалення",
+                            "zh-cn": "标记活动地图以进行删除",
+                        },
+                        type: "boolean",
+                        role: "switch",
+                        write: true,
+                        read: true,
+                        def: false,
+                    },
+                    native: {},
+                }).catch(error => {
+                    this.log.error(`delete_active_map_select: ${error.name}: ${error.message}`);
+                });
+            }
+            path = `${sn}.map.zones.change_active_map_name`;
+            if (!this.createObjectDone[path] && this.sunseeker) {
+                this.createObjectDone[path] = true;
+                await this.setObjectNotExistsAsync(`${this.namespace}.${path}`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Change active map name",
+                            de: "Aktiven Kartennamen ändern",
+                            ru: "Изменить название активной карты",
+                            pt: "Alterar o nome do mapa ativo",
+                            nl: "Wijzig de actieve kaartnaam",
+                            fr: "Modifier le nom de la carte active",
+                            it: "Cambia il nome della mappa attiva",
+                            es: "Cambiar el nombre del mapa activo",
+                            pl: "Zmień nazwę aktywnej mapy",
+                            uk: "Змінити назву активної карти",
+                            "zh-cn": "更改活动地图名称",
+                        },
+                        type: "string",
+                        role: "state",
+                        write: true,
+                        read: true,
+                        def: "",
+                    },
+                    native: {},
+                }).catch(error => {
+                    this.log.error(`change_active_map_name: ${error.name}: ${error.message}`);
+                });
+                if (mapName != "") {
+                    this.sunseeker.setStates(sn, { map_temp_name: mapName }, this.createObjectDone);
+                } else {
+                    this.sunseeker.getMapTempName(sn);
+                }
+            }
+        } else {
+            await this.delObjectAsync(`${this.namespace}.${sn}.map.zones.delete_active_map`, {
+                recursive: true,
+            });
+            await this.delObjectAsync(`${this.namespace}.${sn}.map.zones.delete_active_map_select`, {
+                recursive: true,
+            });
+            await this.delObjectAsync(`${this.namespace}.${sn}.map.zones.change_active_map_name`, {
+                recursive: true,
+            });
+        }
     }
 
     /**
@@ -1538,77 +2945,8 @@ class SunseekerAdapter extends utils.Adapter {
      * @param {any} data
      */
     async setSettings(sn, data) {
-        if (data) {
-            if (data.night_work != null) {
-                await this.setState(`${sn}.settings.night_work`, { val: data.night_work, ack: true });
-            }
-            if (data.recharge_mode != null) {
-                await this.setState(`${sn}.settings.recharge_mode`, { val: data.recharge_mode, ack: true });
-            }
-            if (data.work_touch_mode != null) {
-                await this.setState(`${sn}.settings.work_touch_mode`, { val: data.work_touch_mode, ack: true });
-            }
-            if (data.auto_ride_edge_map_m != null) {
-                await this.setState(`${sn}.settings.auto_ride_edge_map_m`, {
-                    val: data.auto_ride_edge_map_m,
-                    ack: true,
-                });
-            }
-            if (data.dis_along_border != null) {
-                await this.setState(`${sn}.settings.dis_along_border`, { val: data.dis_along_border, ack: true });
-            }
-            if (data.first_along_border != null) {
-                await this.setState(`${sn}.settings.first_along_border`, { val: data.first_along_border, ack: true });
-            }
-            if (data.ai_sensitivity != null) {
-                await this.setState(`${sn}.settings.ai_sensitivity`, { val: data.ai_sensitivity, ack: true });
-            }
-            if (data.time_zone != null) {
-                await this.setState(`${sn}.schedule.schedule_time_zone`, { val: data.time_zone, ack: true });
-            }
-            if (data.time_work_repeat != null) {
-                await this.setState(`${sn}.schedule.schedule_time_work_repeat`, {
-                    val: data.time_work_repeat,
-                    ack: true,
-                });
-            }
-            if (data.follow_border_freq != null) {
-                await this.setState(`${sn}.settings.follow_border_freq`, { val: data.follow_border_freq, ack: true });
-            }
-            if (data.plan_angle != null && data.plan_angle.plan_mode != null) {
-                await this.setState(`${sn}.settings.plan_mode`, { val: data.plan_angle.plan_mode, ack: true });
-            }
-            if (data.mow_efficiency != null && data.mow_efficiency.speed != null) {
-                await this.setState(`${sn}.settings.workSpeed`, { val: data.mow_efficiency.speed, ack: true });
-            }
-            if (data.mow_efficiency != null && data.mow_efficiency.gap != null) {
-                await this.setState(`${sn}.settings.gap`, { val: data.mow_efficiency.gap, ack: true });
-            }
-            if (data.dev_name != null) {
-                await this.setState(`${sn}.settings.dev_name`, { val: data.dev_name, ack: true });
-            }
-            //if (data.dev_model != null) {
-            //    await this.setState(`${sn}.settings.dev_model`, { val: data.dev_model, ack: true });
-            //}
-            if (data.energy_saving_mode != null) {
-                await this.setState(`${sn}.settings.energy_saving_mode`, { val: data.energy_saving_mode, ack: true });
-            }
-            if (data.rain != null) {
-                if (data.rain.rain_flag != null) {
-                    await this.setState(`${sn}.settings.rainFlag`, { val: data.rain.rain_flag, ack: true });
-                }
-                if (data.rain.delay != null) {
-                    await this.setState(`${sn}.settings.rainDelayDuration`, { val: data.rain.delay, ack: true });
-                }
-            }
-            if (data.bladeHeight != null || (data.blade && data.blade.height != null)) {
-                const val = data.bladeHeight != null ? data.bladeHeight : data.blade.height;
-                await this.setState(`${sn}.settings.bladeHeight`, { val: val, ack: true });
-            }
-            if (data.bladeSpeed != null || (data.blade && data.blade.speed != null)) {
-                const val = data.bladeSpeed != null ? data.bladeSpeed : data.blade.speed;
-                await this.setState(`${sn}.settings.bladeSpeed`, { val: val, ack: true });
-            }
+        if (data && this.sunseeker) {
+            await this.sunseeker.setStates(sn, data, this.createObjectDone);
         }
     }
 
