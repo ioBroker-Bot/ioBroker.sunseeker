@@ -5,5 +5,10 @@
     "Polling Interval (Seconds)": "Інтервал опитування (секунди)",
     "Region": "Регіон",
     "Username / E-Mail": "Ім'я користувача / E-Mail",
+    "deleteCloud": "Видалити дані сеансу",
+    "deleteCloudTip": "Видалити дані сесії (у разі проблем із входом)",
+    "deleteMqtt": "Видалити дані mqtt",
+    "deleteMqttTip": "Видалити дані mqtt (у разі проблем з mqtt)",
+    "sessionDelete": "Застереження – видаляйте лише якщо не вдається встановити з’єднання!!!!",
     "sunseeker adapter settings": "Налаштування адаптера для sunseeker"
 }

@@ -99,7 +99,9 @@
         "region": "EU",
         "apptype": "New",
         "interval": 300,
-        "language": "de-DE"
+        "language": "de-DE",
+        "session": {},
+        "mqtt_pw": ""
     },
     "encryptedNative": ["password"],
     "protectedNative": ["password"],

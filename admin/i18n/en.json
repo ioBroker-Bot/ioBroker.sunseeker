@@ -5,5 +5,10 @@
     "Region": "Region",
     "API": "API",
     "Polling Interval (Seconds)": "Polling Interval (Seconds)",
-    "Language": "Language (Known Languages: da, de, fr, fi, pl, en)"
+    "Language": "Language (Known Languages: da, de, fr, fi, pl, en)",
+    "deleteCloudTip": "Delete session data (in case of login problems)",
+    "deleteCloud": "Delete session data",
+    "deleteMqttTip": "Delete mqtt data (in case of mqtt problems)",
+    "deleteMqtt": "Delete mqtt data",
+    "sessionDelete": "Caution – Only delete if a connection cannot be established!!!!"
 }

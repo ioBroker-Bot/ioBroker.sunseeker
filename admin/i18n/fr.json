@@ -5,5 +5,10 @@
     "Polling Interval (Seconds)": "Intervalle d'interrogation (secondes)",
     "Region": "Région",
     "Username / E-Mail": "Nom d'utilisateur / E-mail",
+    "deleteCloud": "Supprimer les données de session",
+    "deleteCloudTip": "Supprimer les données de session (en cas de problèmes de connexion)",
+    "deleteMqtt": "Supprimer les données mqtt",
+    "deleteMqttTip": "Supprimer les données mqtt (en cas de problèmes mqtt)",
+    "sessionDelete": "Attention – Supprimez uniquement si une connexion ne peut pas être établie !!!!",
     "sunseeker adapter settings": "Paramètres d'adaptateur pour sunseeker"
 }

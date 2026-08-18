@@ -5,5 +5,10 @@
     "Polling Interval (Seconds)": "轮询间隔（秒）",
     "Region": "地区",
     "Username / E-Mail": "用户名/电子邮件",
+    "deleteCloud": "删除会话数据",
+    "deleteCloudTip": "删除会话数据（如果出现登录问题）",
+    "deleteMqtt": "删除mqtt数据",
+    "deleteMqttTip": "删除mqtt数据（如果mqtt出现问题）",
+    "sessionDelete": "注意 – 仅在无法建立连接时删除！！！",
     "sunseeker adapter settings": "sunseeker的适配器设置"
 }

@@ -52,7 +52,12 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     async onReady() {
+        //ToDo Multiple MQTT connections (V! + new + old)
+        //ToDo Forced internet disconnection - New MQTT password not required
         this.setState("info.connection", false, true);
+        this.config.session = {};
+        this.config.mqtt_pw = "";
+        this.config.session["action"] = 0;
 
         const reqCount = await this.getStateAsync(`rateLimit.restart`);
         if (reqCount && reqCount.val != null && typeof reqCount.val === "string" && reqCount.val.startsWith("{")) {
@@ -82,6 +87,31 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
 
+        let isPWChanged = false;
+        const instance = await this.getObjectAsync("auth.session");
+        if (instance && instance.native && instance.native.password != "") {
+            if (
+                this.config.username != instance.native.username ||
+                this.config.password != this.decrypt(instance.native.password)
+            ) {
+                this.log.debug(`User and password have been changed!`);
+                isPWChanged = true;
+            }
+            if (this.config.region != instance.native.region || this.config.language != instance.native.language) {
+                this.log.debug(`Region and language have been changed!`);
+                isPWChanged = true;
+            }
+        }
+
+        await this.sessionCheck();
+        this.log.debug(`OLD SESSION: ${JSON.stringify(this.config.session)}`);
+
+        await this.sessionCheckMqtt();
+        if (typeof this.config.mqtt_pw === "string" && this.config.mqtt_pw.length > 10) {
+            //ToDo Check how long is the password valid?
+            this.log.debug(`Use old Mqtt PW!`);
+        }
+
         this.sunseeker = new Sunseeker(cfg.username, cfg.password, this, {
             region: cfg.region || "EU",
             apptype: cfg.apptype || "New",
@@ -91,6 +121,11 @@ class SunseekerAdapter extends utils.Adapter {
         });
 
         await this.createAuth();
+
+        if (isPWChanged) {
+            this.setSession();
+            isPWChanged = false;
+        }
 
         this.sunseeker.on("devices", payload => this.onSunseekerDevices(payload));
         this.sunseeker.on("records", payload => this.onSunseekerRecords(payload));
@@ -125,6 +160,78 @@ class SunseekerAdapter extends utils.Adapter {
         } catch (err) {
             this.log.warn(`Initial-Update: ${err.message}`);
         }
+    }
+
+    async sessionCheckMqtt() {
+        const obj = await this.getObjectAsync("auth.session");
+        if (obj) {
+            const mqtt = await this.getStateAsync("auth.mqtt_connection");
+            if (
+                mqtt != null &&
+                mqtt.val != null &&
+                typeof mqtt.val === "string" &&
+                mqtt.val.startsWith("{") &&
+                mqtt.val != ""
+            ) {
+                try {
+                    const val = JSON.parse(mqtt.val);
+                    if (val && typeof val.pw === "string" && val.pw.length > 10) {
+                        this.config.mqtt_pw = this.decrypt(val.pw);
+                    }
+                } catch {
+                    return;
+                }
+            }
+        }
+    }
+
+    async sessionCheck() {
+        const obj = await this.getObjectAsync("auth.session");
+        if (obj) {
+            const check_key = await this.getStateAsync("auth.session");
+            if (
+                check_key != null &&
+                check_key.val != null &&
+                typeof check_key.val === "string" &&
+                check_key.val.startsWith("{") &&
+                check_key.val != ""
+            ) {
+                try {
+                    const val = JSON.parse(check_key.val);
+                    val.access_token = this.decrypt(val.access_token);
+                    val.refresh_token = this.decrypt(val.refresh_token);
+                    const actual = new Date().getTime();
+                    this.log.debug(`Old session ${check_key.val}`);
+                    if (val && val.next > actual) {
+                        this.log.debug(`Use old session!`);
+                        const diff = val.next - actual;
+                        if (diff < 500) {
+                            val.action = 1;
+                        } else {
+                            val.action = diff;
+                        }
+                    } else if (val && val.next < actual && val.next_refresh > actual) {
+                        this.log.debug(`Use old session!`);
+                        val.action = 1;
+                    }
+                    this.config.session = val;
+                } catch {
+                    return;
+                }
+            }
+        }
+        return;
+    }
+
+    setSession() {
+        this.extendObject("auth.session", {
+            native: {
+                username: this.config.username,
+                password: this.encrypt(this.config.password),
+                region: this.config.region,
+                language: this.config.language,
+            },
+        });
     }
 
     /**

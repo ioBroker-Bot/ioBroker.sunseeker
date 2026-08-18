@@ -139,6 +139,47 @@
                 { "value": "zh-TW", "label": "zh-TW - 中文 (繁體)" }
             ],
             "default": "de-DE"
+        },
+        "_headerAdapterDelete": {
+            "type": "header",
+            "text": "sessionDelete",
+            "size": 2
+        },
+        "setStateMqtt": {
+            "type": "setState",
+            "label": "deleteMqtt",
+            "id": "sunseeker.%INSTANCE%.auth.mqtt_connection",
+            "tooltip": "deleteMqttTip",
+            "ack": true,
+            "val": "{}",
+            "newLine": true,
+            "xs": 12,
+            "sm": 12,
+            "md": 6,
+            "lg": 4,
+            "xl": 4,
+            "style": {
+                "backgroundColor": "red",
+                "border": "outset"
+            }
+        },
+        "setStateCloud": {
+            "type": "setState",
+            "label": "deleteCloud",
+            "id": "sunseeker.%INSTANCE%.auth.session",
+            "tooltip": "deleteCloudTip",
+            "ack": true,
+            "val": "{}",
+            "newLine": true,
+            "xs": 12,
+            "sm": 12,
+            "md": 6,
+            "lg": 4,
+            "xl": 4,
+            "style": {
+                "backgroundColor": "red",
+                "border": "outset"
+            }
         }
     }
 }
