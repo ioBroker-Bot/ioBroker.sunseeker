@@ -60,7 +60,8 @@
         "interval": {
             "type": "number",
             "label": "Polling Interval (Seconds)",
-            "min": 30,
+            "min": 60,
+            "max": 1440,
             "newLine": true,
             "xs": 12,
             "sm": 12,

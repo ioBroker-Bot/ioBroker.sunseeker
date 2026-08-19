@@ -116,7 +116,7 @@ class SunseekerAdapter extends utils.Adapter {
             region: cfg.region || "EU",
             apptype: cfg.apptype || "New",
             language: cfg.language || "de-DE",
-            interval: Number(cfg.interval) > 0 ? Number(cfg.interval) : 300,
+            interval: Number(cfg.interval) > 59 && Number(cfg.interval) < 1441 ? Number(cfg.interval) : 300,
             refreshAfterMqttMs: 60 * 1000,
         });
 
