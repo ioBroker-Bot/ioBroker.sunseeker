@@ -1062,7 +1062,7 @@ class SunseekerAdapter extends utils.Adapter {
             let count = angles;
             let save = 0;
             for (let a = angle; a <= angles - 1; a++) {
-                this.log.info(`delete multi-angle: ${this.namespace}.${sn}.settings.multi_angle.0${count}`);
+                this.log.debug(`delete multi-angle: ${this.namespace}.${sn}.settings.multi_angle.0${count}`);
                 await this.delObjectAsync(`${this.namespace}.${sn}.settings.multi_angle.0${count}`, {
                     recursive: true,
                 });
@@ -1287,12 +1287,9 @@ class SunseekerAdapter extends utils.Adapter {
             this.sunseeker
         ) {
             const angle = {
-                sn: sn,
-                data: {
-                    plan_angle: cleanup.multi_zigzag_angles != null ? cleanup.multi_zigzag_angles : cleanup.plan_angle,
-                },
+                plan_angle: cleanup.multi_zigzag_angles != null ? cleanup.multi_zigzag_angles : cleanup.plan_angle,
             };
-            this.onSunseekerMultiZigZag({ sn, data: angle });
+            this.onSunseekerMultiZigZag({ sn: sn, data: angle });
         }
         if (!this.firstStart[sn]) {
             this.log.debug(`ID: ${id}`);
