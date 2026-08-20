@@ -91,7 +91,7 @@ declare class Sunseeker extends EventEmitter {
     startUpdateCheck(first: boolean): Promise<void>;
     startUpdateCheckInterval(): Promise<void>;
     sleep(ms: number): Promise<void>;
-    setPlanMode(sn: string, mode: number, angle: number): Promise<void>;
+    setPlanMode(sn: string, mode: number, angle: any): Promise<void>;
     setDeviceName(sn: string, val: ioBroker.State | null | undefined): Promise<void>;
     setAutoUpgrade(sn: string, val: ioBroker.State | null | undefined): Promise<void>;
     setNotice(sn: string, data: any): Promise<void>;

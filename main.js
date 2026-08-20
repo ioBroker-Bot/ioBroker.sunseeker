@@ -53,7 +53,7 @@ class SunseekerAdapter extends utils.Adapter {
 
     async onReady() {
         //ToDo Multiple MQTT connections (V! + new + old)
-        //ToDo Forced internet disconnection - New MQTT password not required
+        //ToDo Forced internet disconnection - Add rate limit
         this.setState("info.connection", false, true);
         this.config.session = {};
         this.config.mqtt_pw = "";
@@ -112,6 +112,11 @@ class SunseekerAdapter extends utils.Adapter {
             this.log.debug(`Use old Mqtt PW!`);
         }
 
+        if (isPWChanged) {
+            this.config.session = {};
+            this.config.mqtt_pw = "";
+        }
+
         this.sunseeker = new Sunseeker(cfg.username, cfg.password, this, {
             region: cfg.region || "EU",
             apptype: cfg.apptype || "New",
@@ -131,6 +136,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("records", payload => this.onSunseekerRecords(payload));
         this.sunseeker.on("status", payload => this.onSunseekerStatus(payload));
         this.sunseeker.on("zigzag", payload => this.onSunseekerMultiZigZag(payload));
+        this.sunseeker.on("customZigzag", payload => this.onSunseekerCustomMultiZigZag(payload));
         this.sunseeker.on("notice", payload => this.onSunseekerNotice(payload));
         this.sunseeker.on("mqtt", payload => this.onSunseekerMqtt(payload));
         this.sunseeker.on("objectExists", payload => this.onSunseekerObjectExists(payload));
@@ -775,11 +781,300 @@ class SunseekerAdapter extends utils.Adapter {
         }
     }
 
-    async onSunseekerMultiZigZag({ sn, data, first }) {
-        if (first) {
-            this.log.debug(sn);
-            this.log.debug(JSON.stringify(data));
-            //ToDo zigzag
+    async onSunseekerCustomMultiZigZag({ sn, data }) {
+        //ToDo Add custom zigzag per zone
+        this.log.debug(`${sn} - ${JSON.stringify(data)}`);
+    }
+
+    async onSunseekerMultiZigZag({ sn, data }) {
+        let path = `${sn}.settings.multi_angle`;
+        let common;
+        const states = {};
+        states[`00`] = "No select";
+        if (!this.createObjectDone[path] && this.sunseeker) {
+            common = {
+                name: {
+                    en: "Multi-angle",
+                    de: "Multi-Winkel",
+                    ru: "Многоугольный",
+                    pt: "Multiângulo",
+                    nl: "Meerdere hoeken",
+                    fr: "Multi-angle",
+                    it: "Multiangolo",
+                    es: "Ángulo múltiple",
+                    pl: "Wielokątowy",
+                    uk: "Багатокутний",
+                    "zh-cn": "多角度",
+                },
+            };
+            await this.sunseeker.createDataPoint(
+                `${this.namespace}.${sn}.settings.multi_angle`,
+                common,
+                "channel",
+                null,
+                null,
+                null,
+            );
+        }
+        let angle = 0;
+        let angle_array = {};
+        if (data && data.plan_angle && data.plan_angle.multi_zigzag_angles) {
+            angle = Object.keys(data.plan_angle.multi_zigzag_angles).length;
+            angle_array = data.plan_angle.multi_zigzag_angles;
+        } else if (data && data.multiZigzagAnglesArray) {
+            angle = Object.keys(data.multiZigzagAnglesArray).length;
+            angle_array = data.multiZigzagAnglesArray;
+        }
+        const angle_obj = await this.loadChannels(sn, "settings.multi_angle.0");
+        const angles = Object.keys(angle_obj).length;
+        this.log.debug(`Count angle: ${JSON.stringify(data)} - ${angle}`);
+        this.log.debug(`Count angle: ${angles} - ${angle}`);
+        for (let a = 1; a <= angle; a++) {
+            const path = `${sn}.settings.multi_angle.0${a}`;
+            states[`0${a}`] = `Multi-Angle 0${a}`;
+            await this.setObjectNotExistsAsync(`${this.namespace}.${path}`, {
+                type: "channel",
+                common: {
+                    name: {
+                        en: `Zigzag ${a}`,
+                        de: `Zickzack ${a}`,
+                        ru: `Зигзаг ${a}`,
+                        pt: `Ziguezague ${a}`,
+                        nl: `Zigzag ${a}`,
+                        fr: `Zigzag ${a}`,
+                        it: `Zigzag ${a}`,
+                        es: `Zigzag ${a}`,
+                        pl: `Zygzak ${a}`,
+                        uk: `Зигзаг ${a}`,
+                        "zh-cn": `之字形 ${a}`,
+                    },
+                },
+                native: {},
+            }).catch(error => {
+                this.log.error(`zigzag: ${error.name}: ${error.message}`);
+            });
+            await this.setObjectNotExistsAsync(`${this.namespace}.${path}.angle`, {
+                type: "state",
+                common: {
+                    name: {
+                        en: "Multi-Angle",
+                        de: "Multi-Angle",
+                        ru: "Многоугольный",
+                        pt: "Multiângulo",
+                        nl: "Multi-hoek",
+                        fr: "Multi-angle",
+                        it: "Multi-angolo",
+                        es: "Ángulo múltiple",
+                        pl: "Multi-Angle",
+                        uk: "Багатокутний",
+                        "zh-cn": "多角度",
+                    },
+                    type: "number",
+                    role: "level",
+                    write: true,
+                    read: true,
+                    unit: "°",
+                    min: 0,
+                    max: 180,
+                    def: 90,
+                },
+                native: {},
+            }).catch(error => {
+                this.log.error(`multi-angle: ${error.name}: ${error.message}`);
+            });
+            await this.setObjectNotExistsAsync(`${this.namespace}.${path}.active`, {
+                type: "state",
+                common: {
+                    name: {
+                        en: "Active",
+                        de: "Aktiv",
+                        ru: "Активный",
+                        pt: "Ativo",
+                        nl: "Actief",
+                        fr: "Actif",
+                        it: "Attivo",
+                        es: "Activo",
+                        pl: "Aktywny",
+                        uk: "Активний",
+                        "zh-cn": "积极的",
+                    },
+                    type: "boolean",
+                    role: "switch",
+                    write: true,
+                    read: true,
+                    def: true,
+                },
+                native: {},
+            }).catch(error => {
+                this.log.error(`multi-angle: ${error.name}: ${error.message}`);
+            });
+            await this.setState(`${path}.active`, {
+                val: angle_array[a - 1].active,
+                ack: true,
+            });
+            await this.setState(`${path}.angle`, { val: angle_array[a - 1].angle, ack: true });
+        }
+        path = `${sn}.settings.multi_angle`;
+        if (!this.createObjectDone[path] && this.sunseeker) {
+            this.createObjectDone[path] = true;
+            if (angles < 4) {
+                await this.setObjectNotExistsAsync(`${this.namespace}.${path}.angle`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "New Multi-Angle",
+                            de: "Neuer Multi-Winkel",
+                            ru: "Новый многоугольный объектив",
+                            pt: "Novo Multiângulo",
+                            nl: "Nieuwe multi-hoek",
+                            fr: "Nouveau multi-angle",
+                            it: "Nuovo Multi-angolo",
+                            es: "Nuevo ángulo múltiple",
+                            pl: "Nowy wielokątny",
+                            uk: "Новий багатокутний",
+                            "zh-cn": "全新多角度",
+                        },
+                        type: "number",
+                        role: "level",
+                        write: true,
+                        read: true,
+                        unit: "°",
+                        min: 0,
+                        max: 180,
+                        def: 90,
+                    },
+                    native: {},
+                }).catch(error => {
+                    this.log.error(`multi-angle: ${error.name}: ${error.message}`);
+                });
+                await this.setObjectNotExistsAsync(`${this.namespace}.${path}.angle_active`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "New Multi-Angle (enable/disable)",
+                            de: "Neuer Multi-Angle (aktivieren/deaktivieren)",
+                            ru: "Новая функция многоугольной съемки (включить/выключить)",
+                            pt: "Novo Multi-Ângulo (ativar/desativar)",
+                            nl: "Nieuwe multi-hoekmodus (inschakelen/uitschakelen)",
+                            fr: "Nouvelle fonction multi-angles (activer/désactiver)",
+                            it: "Nuova modalità multi-angolo (attiva/disattiva)",
+                            es: "Nueva función multiángulo (activar/desactivar)",
+                            pl: "Nowy Multi-Angle (włącz/wyłącz)",
+                            uk: "Новий багатокутний огляд (увімкнути/вимкнути)",
+                            "zh-cn": "新增多角度（启用/禁用）",
+                        },
+                        type: "boolean",
+                        role: "switch",
+                        write: true,
+                        read: true,
+                        def: true,
+                    },
+                    native: {},
+                }).catch(error => {
+                    this.log.error(`multi-angle: ${error.name}: ${error.message}`);
+                });
+                await this.setObjectNotExistsAsync(`${this.namespace}.${path}.angle_create`, {
+                    type: "state",
+                    common: {
+                        name: {
+                            en: "Create new Multi-Angle",
+                            de: "Neue Multi-Angle-Funktion erstellen",
+                            ru: "Создать новый многоракурсный режим",
+                            pt: "Criar novo ângulo múltiplo",
+                            nl: "Maak een nieuwe multi-angle aan",
+                            fr: "Créer un nouveau multi-angle",
+                            it: "Crea nuovo Multi-angolo",
+                            es: "Crear nuevo ángulo múltiple",
+                            pl: "Utwórz nowy Multi-Angle",
+                            uk: "Створити новий багатокутний об'єкт",
+                            "zh-cn": "创建新的多角度",
+                        },
+                        type: "boolean",
+                        role: "button",
+                        write: true,
+                        read: true,
+                        def: false,
+                    },
+                    native: {},
+                }).catch(error => {
+                    this.log.error(`multi-angle: ${error.name}: ${error.message}`);
+                });
+            } else {
+                await this.delObjectAsync(`${this.namespace}.${path}.angle_active`, {
+                    recursive: true,
+                });
+                await this.delObjectAsync(`${this.namespace}.${path}.angle`, {
+                    recursive: true,
+                });
+                await this.delObjectAsync(`${this.namespace}.${path}.angle_create`, {
+                    recursive: true,
+                });
+                if (this.createObjectDone[path]) {
+                    delete this.createObjectDone[path];
+                }
+            }
+        }
+        if (angles > 0) {
+            await this.setObjectNotExistsAsync(`${this.namespace}.${path}.delete_angle`, {
+                type: "state",
+                common: {
+                    name: {
+                        en: "Delete multi-angle",
+                        de: "Mehrfachwinkel löschen",
+                        ru: "Удалить многоракурсный",
+                        pt: "Excluir ângulos múltiplos",
+                        nl: "Meerdere hoeken verwijderen",
+                        fr: "Supprimer multi-angle",
+                        it: "Elimina multi-angolo",
+                        es: "Eliminar ángulos múltiples",
+                        pl: "Usuń wielokąt",
+                        uk: "Видалити багатокутний",
+                        "zh-cn": "删除多角度",
+                    },
+                    type: "string",
+                    role: "state",
+                    write: true,
+                    read: true,
+                    def: "00",
+                    states: {
+                        ...states,
+                    },
+                },
+                native: {},
+            }).catch(error => {
+                this.log.error(`multi-angle: ${error.name}: ${error.message}`);
+            });
+            if (angles != angle) {
+                await this.extendObject(`${path}.delete_angle`, {
+                    common: {
+                        states: {
+                            ...states,
+                        },
+                    },
+                });
+            }
+        } else {
+            await this.delObjectAsync(`${this.namespace}.${path}.delete_angle`, {
+                recursive: true,
+            });
+        }
+        if (angles > angle) {
+            let count = angles;
+            let save = 0;
+            for (let a = angle; a <= angles - 1; a++) {
+                this.log.info(`delete multi-angle: ${this.namespace}.${sn}.settings.multi_angle.0${count}`);
+                await this.delObjectAsync(`${this.namespace}.${sn}.settings.multi_angle.0${count}`, {
+                    recursive: true,
+                });
+                if (this.createObjectDone[`${sn}.settings.multi_angle.0${count}`]) {
+                    delete this.createObjectDone[`${sn}.settings.multi_angle.0${count}`];
+                }
+                --count;
+                ++save;
+                if (save > 10) {
+                    break;
+                }
+            }
         }
     }
 
@@ -985,50 +1280,19 @@ class SunseekerAdapter extends utils.Adapter {
         }
         const cleanup = this.removeNull(data);
         this.setMowerRaw(sn, cleanup);
-        const path = `${sn}.settings.plan_angle`;
-        if (!this.createObjectDone[path]) {
-            this.createObjectDone[path] = true;
-            if (cleanup.plan_angle && cleanup.plan_angle.multi_zigzag_angles != null && this.sunseeker) {
-                //ToDo change to onSunseekerMultiZigZag
-                const states = [];
-                states.push(0);
-                if (Object.keys(cleanup.plan_angle.multi_zigzag_angles).length > 0) {
-                    for (const angle of cleanup.plan_angle.multi_zigzag_angles) {
-                        if (angle.active) {
-                            states.push(angle.angle);
-                        }
-                    }
-                    const common = {
-                        name: {
-                            en: "Multi zigzag angles",
-                            de: "Mehrere Zickzackwinkel",
-                            ru: "Много зигзагообразных углов",
-                            pt: "Ângulos em ziguezague múltiplos",
-                            nl: "Meerdere zigzaghoeken",
-                            fr: "Angles en zigzag multiples",
-                            it: "Angoli a zigzag multipli",
-                            es: "Ángulos en zigzag múltiples",
-                            pl: "Wielokątne kąty zygzakowate",
-                            uk: "Багатокутні зигзаги",
-                            "zh-cn": "多锯齿角",
-                        },
-                        type: "number",
-                        role: "level",
-                        write: true,
-                        read: true,
-                        def: 0,
-                        states: states,
-                    };
-                    this.sunseeker.createDataPoint(
-                        `${this.namespace}.${sn}.settings.plan_angle`,
-                        common,
-                        "state",
-                        null,
-                        null,
-                        null,
-                    );
-                }
-            }
+        //ToDo Add custom zigzag
+        if (
+            ((cleanup.plan_angle && cleanup.plan_angle.multi_zigzag_angles != null) ||
+                cleanup.multi_zigzag_angles != null) &&
+            this.sunseeker
+        ) {
+            const angle = {
+                sn: sn,
+                data: {
+                    plan_angle: cleanup.multi_zigzag_angles != null ? cleanup.multi_zigzag_angles : cleanup.plan_angle,
+                },
+            };
+            this.onSunseekerMultiZigZag({ sn, data: angle });
         }
         if (!this.firstStart[sn]) {
             this.log.debug(`ID: ${id}`);
@@ -1703,6 +1967,9 @@ class SunseekerAdapter extends utils.Adapter {
                             await this.delObjectAsync(`${this.namespace}.${sn}.map.zones.0${count}`, {
                                 recursive: true,
                             });
+                            if (this.createObjectDone[`${sn}.map.zones.0${count}`]) {
+                                delete this.createObjectDone[`${sn}.map.zones.0${count}`];
+                            }
                             --count;
                             ++save;
                             if (save > 10) {
@@ -1722,6 +1989,7 @@ class SunseekerAdapter extends utils.Adapter {
      * @param {ioBroker.State | null | undefined} state
      */
     async onStateChange(id, state) {
+        //ToDo Check is device online
         if (!state || state.ack || !this.sunseeker) {
             return;
         }
@@ -1947,6 +2215,31 @@ class SunseekerAdapter extends utils.Adapter {
         if (settingsIdx > 0 && parts[settingsIdx + 1]) {
             const sn = parts[settingsIdx - 1];
             const leaf = parts[settingsIdx + 1];
+            const zigIdx = parts.indexOf("multi_angle");
+            const leafZig = parts[zigIdx + 1];
+            const leafZag = parts[zigIdx + 2];
+            if (leafZig && leafZig === "angle") {
+                this.setState(id, { val: state.val, ack: true });
+                return;
+            }
+            if (leafZig && leafZig === "angle_active") {
+                this.setState(id, { val: state.val, ack: true });
+                return;
+            }
+            if (leafZig && leafZig === "angle_create") {
+                this.createZigZag(id, sn);
+                return;
+            }
+            if (leafZig && leafZig === "delete_angle" && typeof state.val === "string") {
+                this.deleteZigZag(id, sn, state.val);
+                return;
+            }
+            if (leafZag && (leafZag === "angle" || leafZag === "active")) {
+                if (typeof state.val === "number" || typeof state.val === "boolean") {
+                    this.sendZigZag(id, sn, 4, true);
+                }
+                return;
+            }
             if (leaf === "pin_old") {
                 if (typeof state.val === "string") {
                     const numberFormat = /^\d{4}$/;
@@ -2052,18 +2345,11 @@ class SunseekerAdapter extends utils.Adapter {
                 return;
             }
             if (leaf === "plan_mode") {
-                if (typeof state.val === "number" && (state.val == 0 || state.val == 1 || state.val == 4)) {
-                    const angle = await this.getStateAsync(`${sn}.settings.plan_angle`);
-                    if (angle && typeof angle.val === "number") {
-                        this.sunseeker.setPlanMode(sn, state.val, angle.val);
-                        this.setState(id, { val: state.val, ack: true });
-                    }
-                }
-                return;
-            }
-            if (leaf === "plan_angle") {
-                if (typeof state.val === "number") {
+                if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
+                    this.sunseeker.setPlanMode(sn, state.val, null);
                     this.setState(id, { val: state.val, ack: true });
+                } else if (typeof state.val === "number" && state.val == 4) {
+                    this.sendZigZag(id, sn, state.val, false);
                 }
                 return;
             }
@@ -2208,6 +2494,145 @@ class SunseekerAdapter extends utils.Adapter {
             this.setState(id, { val: state.val, ack: true });
         } catch (err) {
             this.log.error(`Command ${command} for ${sn} failed: ${err.message}`);
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     */
+    async createZigZag(id, sn) {
+        //ToDo The angles were wrong.
+        const angle_objs = await this.loadChannels(sn, "settings.multi_angle.0");
+        const angles = Object.keys(angle_objs).length;
+        if (angles == 4) {
+            this.log.warn(`${sn} - Only 4 multi-angles can be created.`);
+        }
+        let isActive = false;
+        let zigzag = [];
+        for (const angle_obj of angle_objs) {
+            const active = await this.getStateAsync(`${angle_obj._id}.active`);
+            const angle = await this.getStateAsync(`${angle_obj._id}.angle`);
+            if (active && active.val != null && angle && typeof angle.val === "number") {
+                if (active.val) {
+                    isActive = true;
+                }
+                const zz = {
+                    active: active.val ? true : false,
+                    angle: angle.val >= 0 && angle.val <= 180 ? angle.val : 90,
+                };
+                zigzag.push(zz);
+            }
+        }
+        const active = await this.getStateAsync(`${sn}.settings.multi_angle.angle_active`);
+        const angle = await this.getStateAsync(`${sn}.settings.multi_angle.angle`);
+        if (active && typeof active.val === "boolean" && angle && typeof angle.val === "number") {
+            if (!isActive && !active.val) {
+                active.val = true;
+            }
+            if (this.sunseeker) {
+                const zz = {
+                    active: active.val ? true : false,
+                    angle: angle.val >= 0 && angle.val <= 180 ? angle.val : 90,
+                };
+                zigzag.push(zz);
+                this.sunseeker.setPlanMode(sn, 4, zigzag);
+                this.setState(id, { val: false, ack: true });
+            }
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {string} state
+     */
+    async deleteZigZag(id, sn, state) {
+        //ToDo The angles were wrong.
+        const angle_objs = await this.loadChannels(sn, "settings.multi_angle.0");
+        const angles = Object.keys(angle_objs).length;
+        if (angles == 0) {
+            this.log.warn(`${sn}: Please create/active a Multi-Angle under .settings.multi-angle!!!`);
+            return;
+        }
+        let isActive = false;
+        let zigzag = [];
+        for (const angle_obj of angle_objs) {
+            const active = await this.getStateAsync(`${angle_obj._id}.active`);
+            const angle = await this.getStateAsync(`${angle_obj._id}.angle`);
+            if (active && active.val != null && angle && typeof angle.val === "number") {
+                if (active.val) {
+                    isActive = true;
+                }
+                const lastsplit = angle_obj._id.split(".")[angle_obj._id.split(".").length - 1];
+                this.log.debug(`${lastsplit} - ${state} - ${angle_obj._id} - ${angles}`);
+                if (lastsplit != state) {
+                    const zz = {
+                        active: active.val ? true : false,
+                        angle: angle.val >= 0 && angle.val <= 180 ? angle.val : 90,
+                    };
+                    zigzag.push(zz);
+                }
+            }
+        }
+        this.log.debug(JSON.stringify(zigzag));
+        if (this.sunseeker) {
+            if (angles > 0) {
+                await this.delObjectAsync(`${this.namespace}.${sn}.settings.multi_angle.0${angles}`, {
+                    recursive: true,
+                });
+            }
+            if (!isActive || zigzag.length == 0) {
+                this.sunseeker.setPlanMode(sn, 0, null);
+            } else {
+                this.sunseeker.setPlanMode(sn, 4, zigzag);
+            }
+            this.setState(id, { val: "00", ack: true });
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {number} state
+     * @param {boolean} update
+     */
+    async sendZigZag(id, sn, state, update) {
+        //ToDo Value 1 or 0 then disable all multi-angles
+        //ToDo The angles were wrong.
+        const angle_objs = await this.loadChannels(sn, "settings.multi_angle.0");
+        const angles = Object.keys(angle_objs).length;
+        if (angles == 0) {
+            this.log.warn(`${sn}: Please create/active a Multi-Angle under .settings.multi-angle!!!`);
+            return;
+        }
+        let isActive = false;
+        let zigzag = [];
+        for (const angle_obj of angle_objs) {
+            const active = await this.getStateAsync(`${angle_obj._id}.active`);
+            const angle = await this.getStateAsync(`${angle_obj._id}.angle`);
+            if (active && active.val != null && angle && typeof angle.val === "number") {
+                if (active.val) {
+                    isActive = true;
+                }
+                const zz = {
+                    active: active.val ? true : false,
+                    angle: angle.val >= 0 && angle.val <= 180 ? angle.val : 90,
+                };
+                zigzag.push(zz);
+            }
+        }
+        if (!isActive && !update) {
+            this.log.warn(`${sn}: Please active a Multi-Angle under .settings.multi-angle!!!`);
+            return;
+        }
+        if (this.sunseeker) {
+            if (!isActive) {
+                this.sunseeker.setPlanMode(sn, 0, null);
+            } else {
+                this.sunseeker.setPlanMode(sn, state, zigzag);
+            }
+            this.setState(id, { val: state, ack: true });
         }
     }
 
