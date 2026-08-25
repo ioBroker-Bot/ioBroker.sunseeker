@@ -73,13 +73,7 @@ declare class Sunseeker extends EventEmitter {
     updateDevice(sn: string): Promise<void>;
     sendCommand(sn: string, command: string, value?: any): Promise<void>;
     setBlade(sn: string, key: "speed" | "height", value: number): Promise<void>;
-    setSettings(
-        sn: string,
-        value: string | number | boolean | null,
-        id: string,
-        key: string,
-        addValue: any,
-    ): Promise<void>;
+    setSettings(sn: string, value: any, id: string, key: string, addValue: any): Promise<void>;
     setRain(sn: string, flag: boolean, durationMin: number): Promise<void>;
     setSchedule(sn: string, plan: Record<string, any>, plan2: Record<string, any>): Promise<void>;
     parseScheduleDay(value: string): { startSec: number; endSec: number } | null;
@@ -141,6 +135,8 @@ declare class Sunseeker extends EventEmitter {
     setStates(sn: string, data: any, isAvailable: any): Promise<void>;
     addDeleteObject(sn: string, data: any, objChannel: string, objName: string, lang: any): Promise<void>;
     createLivemapSettings(sn: string): Promise<void>;
+    createCustomMultiAngle(sn: string, path: string): Promise<void>;
+    setCustomMultiAngle(sn: string, data: any, path: string): Promise<void>;
 }
 
 export = Sunseeker;

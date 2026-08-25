@@ -55,9 +55,6 @@ class SunseekerAdapter extends utils.Adapter {
         //ToDo Multiple MQTT connections (V! + new + old)
         //ToDo Forced internet disconnection - Add rate limit
         this.setState("info.connection", false, true);
-        this.config.session = {};
-        this.config.mqtt_pw = "";
-        this.config.session["action"] = 0;
 
         const reqCount = await this.getStateAsync(`rateLimit.restart`);
         if (reqCount && reqCount.val != null && typeof reqCount.val === "string" && reqCount.val.startsWith("{")) {
@@ -113,8 +110,8 @@ class SunseekerAdapter extends utils.Adapter {
         }
 
         if (isPWChanged) {
-            this.config.session = {};
             this.config.mqtt_pw = "";
+            this.config.session["action"] = 0;
         }
 
         this.sunseeker = new Sunseeker(cfg.username, cfg.password, this, {
@@ -782,12 +779,51 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     async onSunseekerCustomMultiZigZag({ sn, data }) {
+        if (!this.sunseeker) {
+            return;
+        }
         //ToDo Add custom zigzag per zone
         this.log.debug(`${sn} - ${JSON.stringify(data)}`);
+        const meta = this.sunseeker.deviceMeta[sn];
+        this.log.debug(`Region: ${JSON.stringify(meta.custom_multi_sort)}`);
+        const count_sort = Object.keys(meta.custom_multi_sort).length;
+        const count_custom = typeof data.custom === "object" ? data.custom.length : 0;
+        this.log.debug(`Multi: ${count_sort} - ${count_custom}`);
+        if (count_custom != count_sort) {
+            //Why is there a difference?
+        }
+        if (count_custom > 0) {
+            this.setState(`${this.namespace}.${sn}.zones.setAllCustomRaw`, {
+                val: JSON.stringify(data.custom),
+                ack: true,
+            });
+            for (const custom of data.custom) {
+                if (meta.custom_multi_sort[custom.region_id]) {
+                    const channel = meta.custom_multi_sort[custom.region_id];
+                    let path = `${sn}.map.zones.${channel}.custom`;
+                    this.log.debug(`Multi-Array: ${JSON.stringify(custom)}`);
+                    if (!this.createObjectDone[path]) {
+                        await this.sunseeker.createCustomMultiAngle(sn, path);
+                        await this.sunseeker.setCustomMultiAngle(sn, custom, path);
+                        let data = {
+                            multiZigzagAnglesArray: [],
+                        };
+                        if (custom && custom.multi_zigzag_angles) {
+                            data = {
+                                multiZigzagAnglesArray: custom.multi_zigzag_angles,
+                            };
+                        }
+                        await this.onSunseekerMultiZigZag({ sn, data, path_multi: `map.zones.${channel}.custom` });
+                    }
+                } else {
+                    this.log.warn(`Cannot found id ${custom.id} - ${JSON.stringify(custom)}`);
+                }
+            }
+        }
     }
 
-    async onSunseekerMultiZigZag({ sn, data }) {
-        let path = `${sn}.settings.multi_angle`;
+    async onSunseekerMultiZigZag({ sn, data, path_multi }) {
+        let path = `${sn}.${path_multi}.multi_angle`;
         let common;
         const states = {};
         states[`00`] = "No select";
@@ -808,7 +844,7 @@ class SunseekerAdapter extends utils.Adapter {
                 },
             };
             await this.sunseeker.createDataPoint(
-                `${this.namespace}.${sn}.settings.multi_angle`,
+                `${this.namespace}.${sn}.${path_multi}.multi_angle`,
                 common,
                 "channel",
                 null,
@@ -825,12 +861,12 @@ class SunseekerAdapter extends utils.Adapter {
             angle = Object.keys(data.multiZigzagAnglesArray).length;
             angle_array = data.multiZigzagAnglesArray;
         }
-        const angle_obj = await this.loadChannels(sn, "settings.multi_angle.0");
+        const angle_obj = await this.loadChannels(sn, `${path_multi}.multi_angle.0`, true);
         const angles = Object.keys(angle_obj).length;
         this.log.debug(`Count angle: ${JSON.stringify(data)} - ${angle}`);
         this.log.debug(`Count angle: ${angles} - ${angle}`);
         for (let a = 1; a <= angle; a++) {
-            const path = `${sn}.settings.multi_angle.0${a}`;
+            const path = `${sn}.${path_multi}.multi_angle.0${a}`;
             states[`0${a}`] = `Multi-Angle 0${a}`;
             await this.setObjectNotExistsAsync(`${this.namespace}.${path}`, {
                 type: "channel",
@@ -914,7 +950,7 @@ class SunseekerAdapter extends utils.Adapter {
             });
             await this.setState(`${path}.angle`, { val: angle_array[a - 1].angle, ack: true });
         }
-        path = `${sn}.settings.multi_angle`;
+        path = `${sn}.${path_multi}.multi_angle`;
         if (!this.createObjectDone[path] && this.sunseeker) {
             this.createObjectDone[path] = true;
             if (angles < 4) {
@@ -1062,12 +1098,12 @@ class SunseekerAdapter extends utils.Adapter {
             let count = angles;
             let save = 0;
             for (let a = angle; a <= angles - 1; a++) {
-                this.log.debug(`delete multi-angle: ${this.namespace}.${sn}.settings.multi_angle.0${count}`);
-                await this.delObjectAsync(`${this.namespace}.${sn}.settings.multi_angle.0${count}`, {
+                this.log.debug(`delete multi-angle: ${this.namespace}.${sn}.${path_multi}.multi_angle.0${count}`);
+                await this.delObjectAsync(`${this.namespace}.${sn}.${path_multi}.multi_angle.0${count}`, {
                     recursive: true,
                 });
-                if (this.createObjectDone[`${sn}.settings.multi_angle.0${count}`]) {
-                    delete this.createObjectDone[`${sn}.settings.multi_angle.0${count}`];
+                if (this.createObjectDone[`${sn}.${path_multi}.multi_angle.0${count}`]) {
+                    delete this.createObjectDone[`${sn}.${path_multi}.multi_angle.0${count}`];
                 }
                 --count;
                 ++save;
@@ -1239,6 +1275,10 @@ class SunseekerAdapter extends utils.Adapter {
             this.setMowerRaw(sn, data);
             return;
         }
+        if (data.custom) {
+            this.onSunseekerCustomMultiZigZag({ sn, data });
+            return;
+        }
         if (data.time && typeof data.time === "object" && data.time !== null) {
             const time_schedule = Object.assign({}, data);
             this.cleanUpCalendar(sn, time_schedule, 1);
@@ -1289,7 +1329,7 @@ class SunseekerAdapter extends utils.Adapter {
             const angle = {
                 plan_angle: cleanup.multi_zigzag_angles != null ? cleanup.multi_zigzag_angles : cleanup.plan_angle,
             };
-            this.onSunseekerMultiZigZag({ sn: sn, data: angle });
+            this.onSunseekerMultiZigZag({ sn: sn, data: angle, path_multi: "settings" });
         }
         if (!this.firstStart[sn]) {
             this.log.debug(`ID: ${id}`);
@@ -1806,12 +1846,18 @@ class SunseekerAdapter extends utils.Adapter {
                     if (this.sunseeker) {
                         this.regionId[sn] = [];
                         const meta = this.sunseeker.deviceMeta[sn];
+                        meta.custom_multi_sort = {};
+                        let count = 1;
                         for (const region of map_info.region_work) {
                             if (map_info.update_time) {
                                 region["mapId"] = map_info.update_time;
                             } else {
                                 region["mapId"] = meta.mapid;
                             }
+                            if (region.id) {
+                                meta.custom_multi_sort[region.id] = `0${count}`;
+                            }
+                            ++count;
                             this.regionId[sn].push(region.id);
                         }
                         //ToDo search active region_id
@@ -1837,7 +1883,7 @@ class SunseekerAdapter extends utils.Adapter {
                         forceIndex: true,
                     });
                     const zone = Object.keys(map_info.region_work).length;
-                    const zone_obj = await this.loadChannels(sn, "map.zones.0");
+                    const zone_obj = await this.loadChannels(sn, "map.zones.0", false);
                     const zones = Object.keys(zone_obj).length;
                     for (let a = 1; a <= zone; a++) {
                         const path = `${sn}.map.zones.0${a}`;
@@ -1960,7 +2006,7 @@ class SunseekerAdapter extends utils.Adapter {
                         let count = zones;
                         let save = 0;
                         for (let a = zone; a <= zones - 1; a++) {
-                            this.log.info(`delete zone: ${this.namespace}.${sn}.map.zones.0${count}`);
+                            this.log.info(`Delete zone: ${this.namespace}.${sn}.map.zones.0${count}`);
                             await this.delObjectAsync(`${this.namespace}.${sn}.map.zones.0${count}`, {
                                 recursive: true,
                             });
@@ -1975,6 +2021,7 @@ class SunseekerAdapter extends utils.Adapter {
                         }
                     }
                 }
+                this.log.debug(`${sn}: Create custom-multi-angle`);
             } catch (e) {
                 this.log.error(`checkZone: ${e}`);
             }
@@ -1986,118 +2033,128 @@ class SunseekerAdapter extends utils.Adapter {
      * @param {ioBroker.State | null | undefined} state
      */
     async onStateChange(id, state) {
-        //ToDo Check is device online
         if (!state || state.ack || !this.sunseeker) {
             return;
         }
         const parts = id.split(".");
-        if (!this.sunseeker.devicesRaw[parts[2]]) {
+        const raw = this.sunseeker.devicesRaw[parts[2]];
+        if (!raw) {
             this.log.warn(`onStateChange: Device ${parts[2]} unknown`);
             return;
         }
+        if (!raw.online) {
+            this.log.warn(`onStateChange: Device ${parts[2]} is offline`);
+            return;
+        }
         const eventsIdx = parts.indexOf("events");
-        if (parts[eventsIdx + 1] === "eventUpdate") {
-            this.sunseeker.getEvents(parts[eventsIdx - 1], 1, 10);
-            this.setState(id, { val: false, ack: true });
-            return;
-        } else if (parts[eventsIdx + 1] === "makeAllRead" && state.val) {
-            this.sunseeker.setMarkAllAsRead(parts[eventsIdx - 1]);
-            this.setState(id, { val: false, ack: true });
-            return;
+        if (eventsIdx > 0) {
+            if (parts[eventsIdx + 1] === "eventUpdate") {
+                this.sunseeker.getEvents(parts[eventsIdx - 1], 1, 10);
+                this.setState(id, { val: false, ack: true });
+                return;
+            } else if (parts[eventsIdx + 1] === "makeAllRead" && state.val) {
+                this.sunseeker.setMarkAllAsRead(parts[eventsIdx - 1]);
+                this.setState(id, { val: false, ack: true });
+                return;
+            }
         }
         const noticeIdx = parts.indexOf("notice");
-        if (parts[noticeIdx] === "notice") {
-            this.log.debug(JSON.stringify(this.notice));
-            const sn_notice = parts[noticeIdx - 1];
-            if (sn_notice && this.notice[sn_notice]) {
-                const noticeName = parts[noticeIdx + 1];
-                const sendJson = {};
-                if (noticeName && this.notice[sn_notice][noticeName] != null) {
-                    sendJson[noticeName] = state.val;
-                    this.setNotice(sn_notice, sendJson);
-                    this.setState(id, { val: state.val, ack: true });
+        if (noticeIdx > 0) {
+            if (parts[noticeIdx] === "notice") {
+                this.log.debug(JSON.stringify(this.notice));
+                const sn_notice = parts[noticeIdx - 1];
+                if (sn_notice && this.notice[sn_notice]) {
+                    const noticeName = parts[noticeIdx + 1];
+                    const sendJson = {};
+                    if (noticeName && this.notice[sn_notice][noticeName] != null) {
+                        sendJson[noticeName] = state.val;
+                        this.setNotice(sn_notice, sendJson);
+                        this.setState(id, { val: state.val, ack: true });
+                    }
                 }
+                return;
             }
-            return;
         }
         const setIdx = parts.indexOf("map_settings");
-        if (parts[setIdx] === "map_settings") {
+        if (setIdx > 0 && parts[setIdx] === "map_settings") {
             this.sunseeker.setLiveSettings(parts[setIdx - 2], state, parts[setIdx + 1]);
             this.setState(id, { val: state.val, ack: true });
             return;
         }
         const mapIdx = parts.indexOf("map");
-        const snr = parts[mapIdx - 1];
-        if (parts[mapIdx + 1] === "livemap_update" && state && typeof state.val === "boolean") {
-            this.sunseeker.setLiveMap(snr, state.val);
-            this.setState(id, { val: state.val, ack: true });
-            return;
-        }
-        if (parts[mapIdx + 3] === "start_mowing_selected_area" && state && typeof state.val === "string") {
-            this.startMowingSelectedArea(id, snr, state.val);
-            this.setState(id, { val: state.val, ack: true });
-            this.updateDeviceAfterStateChange(snr);
-            return;
-        }
-        if (parts[mapIdx + 2] === "merge_zones") {
-            this.mergeWorkArea(id, snr, "merge_zones", state);
-            this.setState(id, { val: state.val, ack: true });
-            this.updateDeviceAfterStateChange(snr);
-            return;
-        }
-        if (parts[mapIdx + 2] === "change_active_map_name") {
-            const mapId = await this.getStateAsync(`${snr}.map.zones.01.mapId`);
-            if (mapId && typeof mapId.val === "number") {
-                const map_id = {
-                    map_id: mapId.val,
-                };
-                this.sunseeker.setSettings(snr, state.val, "setMapName", "map_name", map_id);
+        if (mapIdx > 0 && parts[mapIdx + 1]) {
+            const snr = parts[mapIdx - 1];
+            if (parts[mapIdx + 1] === "livemap_update" && state && typeof state.val === "boolean") {
+                this.sunseeker.setLiveMap(snr, state.val);
+                this.setState(id, { val: state.val, ack: true });
+                return;
+            }
+            if (parts[mapIdx + 3] === "start_mowing_selected_area" && state && typeof state.val === "string") {
+                this.startMowingSelectedArea(id, snr, state.val);
                 this.setState(id, { val: state.val, ack: true });
                 this.updateDeviceAfterStateChange(snr);
+                return;
             }
-            return;
-        }
-        if (parts[mapIdx + 2] === "save_active_map") {
-            const mapId = await this.getStateAsync(`${snr}.map.zones.01.mapId`);
-            if (mapId && typeof mapId.val === "number" && mapId.val) {
-                this.sunseeker.sendCommand(snr, "backup_map", mapId.val);
-                this.setState(id, { val: false, ack: true });
+            if (parts[mapIdx + 2] === "merge_zones") {
+                this.mergeWorkArea(id, snr, "merge_zones", state);
+                this.setState(id, { val: state.val, ack: true });
                 this.updateDeviceAfterStateChange(snr);
+                return;
             }
-            return;
-        }
-        if (parts[mapIdx + 2] === "delete_active_map") {
-            const del = await this.getStateAsync(`${snr}.map.zones.delete_active_map_select`);
-            if (del && del.val) {
-                this.setState(`${snr}.map.zones.delete_active_map_select`, { val: false, ack: true });
-                const mapId = await this.getStateAsync(`${snr}.map.zones.01.mapId`);
-                if (mapId && typeof mapId.val === "number" && mapId.val) {
-                    this.sunseeker.sendCommand(snr, "backup_delete_active", mapId.val);
-                    this.setState(id, { val: false, ack: true });
-                    this.updateDeviceAfterStateChange(snr);
+            if (parts[mapIdx + 2] === "settings_all_zones") {
+                if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
+                    this.setDefaultCustomMultiAngle(id, snr, state.val);
+                }
+                return;
+            }
+            const customIdx = parts.indexOf("custom");
+            if (customIdx > 0) {
+                const custom_multiIdx = parts.indexOf("multi_angle");
+                if (custom_multiIdx > 0) {
+                    if (parts[custom_multiIdx + 1] === "angle" || parts[custom_multiIdx + 1] === "angle_active") {
+                        this.setState(id, { val: state.val, ack: true });
+                        return;
+                    }
+                    if (parts[custom_multiIdx + 2] === "angle" || parts[custom_multiIdx + 2] === "active") {
+                        this.editCustomZigZag(id, snr, state.val);
+                        return;
+                    }
+                    if (parts[custom_multiIdx + 1] === "angle_create") {
+                        this.createCustomZigZag(id, snr);
+                        return;
+                    }
+                    if (parts[custom_multiIdx + 1] === "delete_angle") {
+                        if (state && typeof state.val === "string") {
+                            this.deleteCustomZigZag(id, snr, state.val);
+                        }
+                        return;
+                    }
+                }
+                if (
+                    parts[customIdx + 1] === "plan_mode" ||
+                    parts[customIdx + 1] === "setting" ||
+                    parts[customIdx + 1] === "start" ||
+                    parts[customIdx + 1] === "work_gap" ||
+                    parts[customIdx + 1] === "work_speed"
+                ) {
+                    this.editCustomSetting(id, snr, state.val, parts[customIdx + 1]);
+                    return;
+                }
+                if (parts[customIdx + 1] === "setCustomZoneSettings") {
+                    if (state.val) {
+                        this.setCustomZoneSettings(id, snr);
+                    }
+                    return;
+                }
+                if (parts[customIdx + 1] === "setCustomRaw") {
+                    if (typeof state.val === "string") {
+                        this.setCustomRaw(id, snr, state.val);
+                    }
+                    return;
                 }
             }
-            return;
-        }
-        if (parts[mapIdx + 2] === "delete_active_map_select") {
-            this.setState(id, { val: state.val, ack: true });
-            return;
-        }
-        if (parts[mapIdx + 3] === "split_zones") {
-            const lastIndex = id.lastIndexOf(".");
-            if (lastIndex !== -1) {
-                const result = id.substring(0, lastIndex);
-                this.splitWorkArea(id, snr, result, "split_zones", state);
-                this.updateDeviceAfterStateChange(snr);
-                this.setState(id, { val: state.val, ack: true });
-            }
-            return;
-        }
-        if (parts[mapIdx + 3] === "mapName" && state && typeof state.val === "string") {
-            const lastIndex = id.lastIndexOf(".");
-            if (lastIndex !== -1) {
-                const result = id.substring(0, lastIndex);
-                const mapId = await this.getStateAsync(`${result}.mapId`);
+            if (parts[mapIdx + 2] === "change_active_map_name") {
+                const mapId = await this.getStateAsync(`${snr}.map.zones.01.mapId`);
                 if (mapId && typeof mapId.val === "number") {
                     const map_id = {
                         map_id: mapId.val,
@@ -2106,71 +2163,129 @@ class SunseekerAdapter extends utils.Adapter {
                     this.setState(id, { val: state.val, ack: true });
                     this.updateDeviceAfterStateChange(snr);
                 }
+                return;
             }
-            return;
-        }
-        if (parts[mapIdx + 3] === "name" && state && typeof state.val === "string") {
-            const lastIndex = id.lastIndexOf(".");
-            if (lastIndex !== -1) {
-                const result = id.substring(0, lastIndex);
-                const zoneId = await this.getStateAsync(`${result}.id`);
-                if (zoneId && typeof zoneId.val === "number") {
-                    //const meta = this.sunseeker.deviceMeta[snr];
-                    /**
-                     * type = 0 region_workzone
-                     * type = 2 region_passage
-                     * type = 3 region_obstacle
-                     * type = 4 region_forbidden
-                     */
-                    const zoneId_id = {
-                        region_id: zoneId.val,
-                        region_name: state.val,
-                        region_type: 0,
-                    };
-                    this.sunseeker.setSettings(snr, state.val, "setRegionName", "region_name", zoneId_id);
-                    this.setState(id, { val: state.val, ack: true });
-                    this.updateDeviceAfterStateChange(snr);
-                }
-            }
-            return;
-        }
-        if (parts[mapIdx + 3] === "useThisMap" && state && typeof state.val === "string") {
-            const lastIndex = id.lastIndexOf(".");
-            if (lastIndex !== -1) {
-                const result = id.substring(0, lastIndex);
-                const mapId = await this.getStateAsync(`${result}.mapId`);
-                const used = await this.getStateAsync(`${result}.used`);
-                if (mapId && typeof mapId.val === "number" && used && typeof used.val === "boolean" && !used.val) {
-                    this.sunseeker.sendCommand(snr, "used", mapId.val);
+            if (parts[mapIdx + 2] === "save_active_map") {
+                const mapId = await this.getStateAsync(`${snr}.map.zones.01.mapId`);
+                if (mapId && typeof mapId.val === "number" && mapId.val) {
+                    this.sunseeker.sendCommand(snr, "backup_map", mapId.val);
                     this.setState(id, { val: false, ack: true });
                     this.updateDeviceAfterStateChange(snr);
                 }
+                return;
             }
-            return;
-        }
-        if (parts[mapIdx + 3] === "delete" && state && typeof state.val === "boolean") {
-            const lastIndex = id.lastIndexOf(".");
-            if (lastIndex !== -1) {
-                const result = id.substring(0, lastIndex);
-                const del = await this.getStateAsync(`${result}.delete_select`);
+            if (parts[mapIdx + 2] === "delete_active_map") {
+                const del = await this.getStateAsync(`${snr}.map.zones.delete_active_map_select`);
                 if (del && del.val) {
-                    this.setState(`${result}.delete_select`, { val: false, ack: true });
-                    const mapId = await this.getStateAsync(`${result}.mapId`);
-                    if (mapId && typeof mapId.val === "number") {
-                        this.sunseeker.sendCommand(snr, "backup_delete", mapId.val);
+                    this.setState(`${snr}.map.zones.delete_active_map_select`, { val: false, ack: true });
+                    const mapId = await this.getStateAsync(`${snr}.map.zones.01.mapId`);
+                    if (mapId && typeof mapId.val === "number" && mapId.val) {
+                        this.sunseeker.sendCommand(snr, "backup_delete_active", mapId.val);
                         this.setState(id, { val: false, ack: true });
                         this.updateDeviceAfterStateChange(snr);
                     }
                 }
+                return;
             }
-            return;
-        }
-        if (parts[mapIdx + 3] === "delete_select" && state && typeof state.val === "boolean") {
-            this.setState(id, { val: state.val, ack: true });
-            return;
+            if (parts[mapIdx + 2] === "delete_active_map_select") {
+                this.setState(id, { val: state.val, ack: true });
+                return;
+            }
+            if (parts[mapIdx + 3] === "split_zones") {
+                const lastIndex = id.lastIndexOf(".");
+                if (lastIndex !== -1) {
+                    const result = id.substring(0, lastIndex);
+                    this.splitWorkArea(id, snr, result, "split_zones", state);
+                    this.updateDeviceAfterStateChange(snr);
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (parts[mapIdx + 3] === "mapName" && state && typeof state.val === "string") {
+                const lastIndex = id.lastIndexOf(".");
+                if (lastIndex !== -1) {
+                    const result = id.substring(0, lastIndex);
+                    const mapId = await this.getStateAsync(`${result}.mapId`);
+                    if (mapId && typeof mapId.val === "number") {
+                        const map_id = {
+                            map_id: mapId.val,
+                        };
+                        this.sunseeker.setSettings(snr, state.val, "setMapName", "map_name", map_id);
+                        this.setState(id, { val: state.val, ack: true });
+                        this.updateDeviceAfterStateChange(snr);
+                    }
+                }
+                return;
+            }
+            if (parts[mapIdx + 3] === "name" && state && typeof state.val === "string") {
+                const lastIndex = id.lastIndexOf(".");
+                if (lastIndex !== -1) {
+                    const result = id.substring(0, lastIndex);
+                    const zoneId = await this.getStateAsync(`${result}.id`);
+                    if (zoneId && typeof zoneId.val === "number") {
+                        //const meta = this.sunseeker.deviceMeta[snr];
+                        /**
+                         * type = 0 region_workzone
+                         * type = 2 region_passage
+                         * type = 3 region_obstacle
+                         * type = 4 region_forbidden
+                         */
+                        const zoneId_id = {
+                            region_id: zoneId.val,
+                            region_name: state.val,
+                            region_type: 0,
+                        };
+                        this.sunseeker.setSettings(snr, state.val, "setRegionName", "region_name", zoneId_id);
+                        this.setState(id, { val: state.val, ack: true });
+                        this.updateDeviceAfterStateChange(snr);
+                    }
+                }
+                return;
+            }
+            if (parts[mapIdx + 3] === "useThisMap" && state && typeof state.val === "string") {
+                const lastIndex = id.lastIndexOf(".");
+                if (lastIndex !== -1) {
+                    const result = id.substring(0, lastIndex);
+                    const mapId = await this.getStateAsync(`${result}.mapId`);
+                    const used = await this.getStateAsync(`${result}.used`);
+                    if (mapId && typeof mapId.val === "number" && used && typeof used.val === "boolean" && !used.val) {
+                        this.sunseeker.sendCommand(snr, "used", mapId.val);
+                        this.setState(id, { val: false, ack: true });
+                        this.updateDeviceAfterStateChange(snr);
+                    }
+                }
+                return;
+            }
+            if (parts[mapIdx + 3] === "delete" && state && typeof state.val === "boolean") {
+                const lastIndex = id.lastIndexOf(".");
+                if (lastIndex !== -1) {
+                    const result = id.substring(0, lastIndex);
+                    const del = await this.getStateAsync(`${result}.delete_select`);
+                    if (del && del.val) {
+                        this.setState(`${result}.delete_select`, { val: false, ack: true });
+                        const mapId = await this.getStateAsync(`${result}.mapId`);
+                        if (mapId && typeof mapId.val === "number") {
+                            this.sunseeker.sendCommand(snr, "backup_delete", mapId.val);
+                            this.setState(id, { val: false, ack: true });
+                            this.updateDeviceAfterStateChange(snr);
+                        }
+                    }
+                }
+                return;
+            }
+            if (parts[mapIdx + 3] === "delete_select" && state && typeof state.val === "boolean") {
+                this.setState(id, { val: state.val, ack: true });
+                return;
+            }
         }
         const ownIdx = parts.indexOf("expert");
-        if (parts[ownIdx + 1] === "request" && state && typeof state.val === "string" && state.val.startsWith("{")) {
+        if (
+            ownIdx > 0 &&
+            parts[ownIdx + 1] === "request" &&
+            state &&
+            typeof state.val === "string" &&
+            state.val.startsWith("{")
+        ) {
             this.sunseeker.ownRequest(parts[ownIdx - 1], state.val);
             this.setState(id, { val: state.val, ack: true });
             return;
@@ -2497,10 +2612,215 @@ class SunseekerAdapter extends utils.Adapter {
     /**
      * @param {string} id
      * @param {string} sn
+     * @param {string} state
+     */
+    async setCustomRaw(id, sn, state) {
+        if (typeof state === "string" && state.startsWith("{") && this.sunseeker) {
+            try {
+                const raw = JSON.parse(state);
+                this.log.debug(JSON.stringify(raw));
+                if (raw.plan_mode === 2 || raw.plan_mode === 3 || raw.plan_mode > 4 || raw.plan_mode < 0) {
+                    this.log.error(`plan_mode: Only 0, 1 and 4 are allowed!`);
+                    return;
+                }
+                if (raw.start !== 0 && raw.start !== 1) {
+                    this.log.error(`start: Only 0 and 1 are allowed!`);
+                    return;
+                }
+                if (raw.setting !== true && raw.setting !== false) {
+                    this.log.error(`setting: Only 0 and 1 are allowed!`);
+                    return;
+                }
+                if (raw.work_speed > 3 || raw.work_speed < 1) {
+                    this.log.error(`work_speed: Only 1, 2 and 3 are allowed!`);
+                    return;
+                }
+                if (raw.work_gap > 3 || raw.work_gap < 1) {
+                    this.log.error(`work_gap: Only 1, 2 and 3 are allowed!`);
+                    return;
+                }
+                this.sunseeker.setSettings(sn, raw, "setCustom", "custom", null);
+                await this.setState(id, { val: "", ack: true });
+            } catch (e) {
+                this.log.error(`setCustomRaw: ${e}`);
+            }
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} snr
+     */
+    async setCustomZoneSettings(id, snr) {
+        const zones = id.split(".");
+        const zone = zones[5];
+        const raw = await this.getRaw(id, snr, zone);
+        if (raw && Object.keys(raw).length > 0) {
+            await this.setCustomRaw(id, snr, raw);
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} snr
+     * @param {string | number | boolean | null} state
+     * @param {string} command
+     */
+    async editCustomSetting(id, snr, state, command) {
+        const zones = id.split(".");
+        const zone = zones[5];
+        const raw = await this.getRaw(id, snr, zone);
+        if (raw && Object.keys(raw).length > 0) {
+            this.log.debug(JSON.stringify(raw));
+            if (raw[command] != null) {
+                if (command === "start") {
+                    raw[command] = state ? true : false;
+                } else {
+                    raw[command] = state;
+                }
+                await this.setState(`${this.namespace}.${snr}.map.zones.${zone}.custom.setCustomRaw`, {
+                    val: JSON.stringify(raw),
+                    ack: true,
+                    expire: 60,
+                });
+                await this.setState(id, { val: state, ack: true });
+            }
+        } else {
+            this.log.warn(`Cannot found custom raw!`);
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} snr
+     * @param {string | number | boolean | null} state
+     */
+    async editCustomZigZag(id, snr, state) {
+        const zones = id.split(".");
+        const zone = zones[5];
+        const zig = Number(zones[8]);
+        const raw = await this.getRaw(id, snr, zone);
+        const obj = typeof state === "boolean" ? "active" : "angle";
+        if (raw && Object.keys(raw).length > 0) {
+            this.log.debug(JSON.stringify(raw));
+            raw.multi_zigzag_angles[zig - 1][obj] = state;
+            await this.setState(`${this.namespace}.${snr}.map.zones.${zone}.custom.setCustomRaw`, {
+                val: JSON.stringify(raw),
+                ack: true,
+                expire: 60,
+            });
+            await this.setState(id, { val: state, ack: true });
+        } else {
+            this.log.warn(`Cannot found custom raw!`);
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {string} zone
+     */
+    async getRaw(id, sn, zone) {
+        const edit_raw = await this.getStateAsync(`${this.namespace}.${sn}.map.zones.${zone}.custom.setCustomRaw`);
+        if (edit_raw && typeof edit_raw.val === "string" && edit_raw.val.startsWith("{")) {
+            return JSON.parse(edit_raw.val);
+        }
+        const state_raw = await this.getStateAsync(`${this.namespace}.${sn}.map.zones.${zone}.custom.currentCustomRaw`);
+        if (state_raw && typeof state_raw.val === "string" && state_raw.val.startsWith("{")) {
+            return JSON.parse(state_raw.val);
+        }
+        return null;
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {number} state
+     */
+    async setDefaultCustomMultiAngle(id, sn, state) {
+        if (!this.sunseeker) {
+            return;
+        }
+        const meta = this.sunseeker.deviceMeta[sn];
+        if (!meta) {
+            this.log.warn(`${sn}: Missing deviceMeta!`);
+            return;
+        }
+        this.log.debug(`setDefaultCustomMultiAngle: ${sn} - ${state} - ${JSON.stringify(meta.custom_multi_sort)}`);
+        const count_sort = Object.keys(meta.custom_multi_sort).length;
+        if (count_sort > 0) {
+            const region = [];
+            for (const id in meta.custom_multi_sort) {
+                const val = {
+                    region_id: typeof id === "number" ? id : Number(id),
+                    setting: state == 0 ? false : true,
+                };
+                region.push(val);
+            }
+            this.log.debug(JSON.stringify(region));
+            this.sunseeker.setSettings(sn, region, "setCustom", "custom", null);
+            this.setState(id, { val: state, ack: true });
+        } else {
+            this.log.warn(`${sn}: Missing region id ${meta.custom_multi_sort}`);
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     */
+    async createCustomZigZag(id, sn) {
+        if (!this.sunseeker) {
+            return;
+        }
+        const id_new = id.replace(".angle_create", "");
+        const lastIndex = id_new.lastIndexOf(".");
+        if (lastIndex !== -1) {
+            const result = id_new.substring(0, lastIndex);
+            const raw = await this.getStateAsync(`${result}.currentCustomRaw`);
+            if (raw && typeof raw.val === "string" && raw.val.startsWith("{")) {
+                try {
+                    const json = JSON.parse(raw.val);
+                    if (!json.multi_zigzag_angles) {
+                        json.multi_zigzag_angles = [];
+                    }
+                    if (json.multi_zigzag_angles.length == 4) {
+                        this.log.warn(`${sn} - Only 4 multi-angles can be created.`);
+                        return;
+                    }
+                    const active = await this.getStateAsync(`${id_new}.angle_active`);
+                    const angle = await this.getStateAsync(`${id_new}.angle`);
+                    if (active && active.val != null && angle && typeof angle.val === "number") {
+                        const zz = {
+                            active: active.val ? true : false,
+                            angle: angle.val >= 0 && angle.val <= 180 ? angle.val : 90,
+                        };
+                        json.multi_zigzag_angles.push(zz);
+                        json.plan_mode = 4;
+                        json.setting = true;
+                        this.sunseeker.setSettings(sn, json, "setCustom", "custom", null);
+                        this.setState(id, { val: false, ack: true });
+                    } else {
+                        this.log.warn(`Cannot found active and angle!`);
+                    }
+                } catch (e) {
+                    this.log.error(`Parse error ${e}`);
+                }
+            } else {
+                this.log.error(`Cannot found raw data!`);
+            }
+        } else {
+            this.log.error(`Cannot found last index!`);
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
      */
     async createZigZag(id, sn) {
         //ToDo The angles were wrong.
-        const angle_objs = await this.loadChannels(sn, "settings.multi_angle.0");
+        const angle_objs = await this.loadChannels(sn, "settings.multi_angle.0", true);
         const angles = Object.keys(angle_objs).length;
         if (angles == 4) {
             this.log.warn(`${sn} - Only 4 multi-angles can be created.`);
@@ -2519,6 +2839,8 @@ class SunseekerAdapter extends utils.Adapter {
                     angle: angle.val >= 0 && angle.val <= 180 ? angle.val : 90,
                 };
                 zigzag.push(zz);
+            } else {
+                this.log.warn(`Cannot found active and angle!`);
             }
         }
         const active = await this.getStateAsync(`${sn}.settings.multi_angle.angle_active`);
@@ -2544,9 +2866,56 @@ class SunseekerAdapter extends utils.Adapter {
      * @param {string} sn
      * @param {string} state
      */
+    async deleteCustomZigZag(id, sn, state) {
+        if (!this.sunseeker) {
+            return;
+        }
+        const id_new = id.replace(".angle_create", "");
+        const lastIndex = id_new.lastIndexOf(".");
+        if (lastIndex !== -1) {
+            const result = id_new.substring(0, lastIndex);
+            const raw = await this.getStateAsync(`${result}.currentCustomRaw`);
+            if (raw && typeof raw.val === "string" && raw.val.startsWith("{")) {
+                try {
+                    const json = JSON.parse(raw.val);
+                    if (!json.multi_zigzag_angles) {
+                        this.log.error(`Cannot found multi-angle`);
+                        return;
+                    }
+                    let zigzag = [];
+                    let count = 1;
+                    for (const zigzag of json.multi_zigzag_angles) {
+                        if (state != `0${count}`) {
+                            zigzag.push(zigzag);
+                        }
+                    }
+                    if (zigzag.length == 0) {
+                        delete json.multi_zigzag_angles;
+                        json.plan_mode = 0;
+                    } else {
+                        json.plan_mode = 4;
+                    }
+                    this.sunseeker.setSettings(sn, json, "setCustom", "custom", null);
+                    this.setState(id, { val: false, ack: true });
+                } catch (e) {
+                    this.log.error(`Parse error ${e}`);
+                }
+            } else {
+                this.log.error(`Cannot found raw data`);
+            }
+        } else {
+            this.log.error(`Cannot found last index!`);
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {string} state
+     */
     async deleteZigZag(id, sn, state) {
         //ToDo The angles were wrong.
-        const angle_objs = await this.loadChannels(sn, "settings.multi_angle.0");
+        const angle_objs = await this.loadChannels(sn, "settings.multi_angle.0", true);
         const angles = Object.keys(angle_objs).length;
         if (angles == 0) {
             this.log.warn(`${sn}: Please create/active a Multi-Angle under .settings.multi-angle!!!`);
@@ -2597,7 +2966,7 @@ class SunseekerAdapter extends utils.Adapter {
     async sendZigZag(id, sn, state, update) {
         //ToDo Value 1 or 0 then disable all multi-angles
         //ToDo The angles were wrong.
-        const angle_objs = await this.loadChannels(sn, "settings.multi_angle.0");
+        const angle_objs = await this.loadChannels(sn, "settings.multi_angle.0", true);
         const angles = Object.keys(angle_objs).length;
         if (angles == 0) {
             this.log.warn(`${sn}: Please create/active a Multi-Angle under .settings.multi-angle!!!`);
@@ -2648,6 +3017,7 @@ class SunseekerAdapter extends utils.Adapter {
      * @param {string} sn
      */
     updateDeviceAfterStateChange(sn) {
+        this.log.debug(`Update device: ${sn}`);
         this.updateDeviceStateChange = this.setTimeout(() => {
             this.updateDeviceStateChange = null;
             this.sunseeker?.updateDevice(sn).catch(() => {});
@@ -2981,10 +3351,20 @@ class SunseekerAdapter extends utils.Adapter {
     /**
      * @param {string} sn
      * @param {string} path
+     * @param {boolean} select
      */
-    async loadChannels(sn, path) {
+    async loadChannels(sn, path, select) {
         const obj = await this.getChannelsAsync();
-        return obj.filter(m => m._id.includes(`${this.namespace}.${sn}.${path}`));
+        if (select) {
+            return obj.filter(m => m._id.includes(`${this.namespace}.${sn}.${path}`));
+        }
+        return obj.filter(
+            m =>
+                m._id == `${this.namespace}.${sn}.${path}1` ||
+                m._id == `${this.namespace}.${sn}.${path}2` ||
+                m._id == `${this.namespace}.${sn}.${path}3` ||
+                m._id == `${this.namespace}.${sn}.${path}4`,
+        );
     }
 
     /**
@@ -2994,7 +3374,7 @@ class SunseekerAdapter extends utils.Adapter {
     async updateMaps(sn, maps) {
         const map_new = Object.keys(maps).length;
         if (!this.availableMaps) {
-            this.availableMaps = await this.loadChannels(sn, "map.maps.0");
+            this.availableMaps = await this.loadChannels(sn, "map.maps.0", true);
         }
         const map_obj = this.availableMaps;
         const map_old = Object.keys(map_obj).length;
@@ -3012,7 +3392,7 @@ class SunseekerAdapter extends utils.Adapter {
                     break;
                 }
             }
-            this.availableMaps = await this.loadChannels(sn, "map.maps.0");
+            this.availableMaps = await this.loadChannels(sn, "map.maps.0", true);
         }
         await this.json2iob.parse(`${sn}.map.maps`, maps, {
             channelName: {
