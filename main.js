@@ -2654,7 +2654,7 @@ class SunseekerAdapter extends utils.Adapter {
     async setCustomZoneSettings(id, snr) {
         const zones = id.split(".");
         const zone = zones[5];
-        const raw = await this.getRaw(id, snr, zone);
+        const raw = await this.getRaw(snr, zone);
         if (raw && Object.keys(raw).length > 0) {
             await this.setCustomRaw(id, snr, raw);
         }
@@ -2669,7 +2669,7 @@ class SunseekerAdapter extends utils.Adapter {
     async editCustomSetting(id, snr, state, command) {
         const zones = id.split(".");
         const zone = zones[5];
-        const raw = await this.getRaw(id, snr, zone);
+        const raw = await this.getRaw(snr, zone);
         if (raw && Object.keys(raw).length > 0) {
             this.log.debug(JSON.stringify(raw));
             if (raw[command] != null) {
@@ -2699,7 +2699,7 @@ class SunseekerAdapter extends utils.Adapter {
         const zones = id.split(".");
         const zone = zones[5];
         const zig = Number(zones[8]);
-        const raw = await this.getRaw(id, snr, zone);
+        const raw = await this.getRaw(snr, zone);
         const obj = typeof state === "boolean" ? "active" : "angle";
         if (raw && Object.keys(raw).length > 0) {
             this.log.debug(JSON.stringify(raw));
@@ -2716,13 +2716,18 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     /**
-     * @param {string} id
      * @param {string} sn
      * @param {string} zone
      */
-    async getRaw(id, sn, zone) {
-        const edit_raw = await this.getStateAsync(`${this.namespace}.${sn}.map.zones.${zone}.custom.setCustomRaw`);
-        if (edit_raw && typeof edit_raw.val === "string" && edit_raw.val.startsWith("{")) {
+    async getRaw(sn, zone) {
+        const path = `${this.namespace}.${sn}.map.zones.${zone}.custom.setCustomRaw`;
+        const edit_raw = await this.getStateAsync(path);
+        const actual_time = new Date().getTime();
+        let diff = 60001;
+        if (edit_raw && edit_raw.lc != null) {
+            diff = actual_time - edit_raw.lc;
+        }
+        if (edit_raw && typeof edit_raw.val === "string" && edit_raw.val.startsWith("{") && diff < 60001) {
             return JSON.parse(edit_raw.val);
         }
         const state_raw = await this.getStateAsync(`${this.namespace}.${sn}.map.zones.${zone}.custom.currentCustomRaw`);
