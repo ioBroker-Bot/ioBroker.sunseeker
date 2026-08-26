@@ -376,6 +376,10 @@ class SunseekerAdapter extends utils.Adapter {
                     icon: "img/schedule.png",
                 };
                 await this.sunseeker.createDataPoint(`${this.namespace}.${sn}`, common, "device", null, null, null);
+                if (!this.createObjectDone["ensureScheduleStates"]) {
+                    this.createObjectDone["ensureScheduleStates"] = true;
+                    await this.sunseeker.ensureScheduleStates(sn);
+                }
                 await this.sunseeker.createSettingsFW(sn);
                 const meta = this.sunseeker.deviceMeta[sn];
                 if (meta && (meta.modelClass === "S" || d.modelClass === "X")) {
@@ -432,6 +436,34 @@ class SunseekerAdapter extends utils.Adapter {
                         );
                         common = {
                             name: {
+                                en: "Apply all custom raw",
+                                de: "Alle benutzerdefinierten Rohdaten anwenden",
+                                ru: "Применить все пользовательские исходные данные",
+                                pt: "Aplicar todas as matérias-primas personalizadas",
+                                nl: "Pas alle aangepaste ruwe gegevens toe.",
+                                fr: "Appliquer toutes les matières brutes personnalisées",
+                                it: "Applica tutte le impostazioni grezze personalizzate",
+                                es: "Aplicar todo el crudo personalizado",
+                                pl: "Zastosuj wszystkie niestandardowe surowe",
+                                uk: "Застосувати всі користувацькі RAW-файли",
+                                "zh-cn": "应用所有自定义原始数据",
+                            },
+                            type: "string",
+                            role: "json",
+                            write: true,
+                            read: true,
+                            def: JSON.stringify({}),
+                        };
+                        await this.sunseeker.createDataPoint(
+                            `${this.namespace}.${path}.zones.setAllCustomRaw`,
+                            common,
+                            "state",
+                            null,
+                            null,
+                            null,
+                        );
+                        common = {
+                            name: {
                                 en: "Update live map",
                                 de: "Live-Karte aktualisieren",
                                 ru: "Обновить карту в реальном времени",
@@ -466,7 +498,6 @@ class SunseekerAdapter extends utils.Adapter {
                 }
                 if (!this.createObjectDone["ensureRemoteButtons"]) {
                     this.createObjectDone["ensureRemoteButtons"] = true;
-                    await this.sunseeker.ensureScheduleStates(sn);
                     await this.sunseeker.ensureRemoteButtons(sn);
                 }
             }
@@ -522,7 +553,10 @@ class SunseekerAdapter extends utils.Adapter {
         }
     }
 
-    async onSunseekerRecords({ sn, records }) {
+    /**
+     * @param {string} sn
+     */
+    async onSunseekerRecords(sn) {
         let common;
         let path = `${sn}.events`;
         if (!this.createObjectDone[path] && this.sunseeker) {
@@ -544,6 +578,31 @@ class SunseekerAdapter extends utils.Adapter {
                 icon: "img/work.png",
             };
             await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "channel", null, null, null);
+        }
+        path = `${sn}.events.systemMessage`;
+        if (!this.createObjectDone[path] && this.sunseeker) {
+            this.createObjectDone[path] = true;
+            common = {
+                name: {
+                    en: "System messages as JSON",
+                    de: "Systemmeldungen als JSON",
+                    ru: "Системные сообщения в формате JSON",
+                    pt: "Mensagens do sistema em formato JSON",
+                    nl: "Systeemberichten als JSON",
+                    fr: "Messages système au format JSON",
+                    it: "Messaggi di sistema in formato JSON",
+                    es: "Mensajes del sistema como JSON",
+                    pl: "Wiadomości systemowe w formacie JSON",
+                    uk: "Системні повідомлення у форматі JSON",
+                    "zh-cn": "系统消息（JSON 格式）",
+                },
+                type: "string",
+                role: "json",
+                write: false,
+                read: true,
+                def: JSON.stringify({}),
+            };
+            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
         }
         path = `${sn}.events.unreadSystemMessage`;
         if (!this.createObjectDone[path] && this.sunseeker) {
@@ -695,32 +754,6 @@ class SunseekerAdapter extends utils.Adapter {
             };
             await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
         }
-        path = `${sn}.events.systemMessage`;
-        if (!this.createObjectDone[path] && this.sunseeker) {
-            this.createObjectDone[path] = true;
-            common = {
-                name: {
-                    en: "System messages as JSON",
-                    de: "Systemmeldungen als JSON",
-                    ru: "Системные сообщения в формате JSON",
-                    pt: "Mensagens do sistema em formato JSON",
-                    nl: "Systeemberichten als JSON",
-                    fr: "Messages système au format JSON",
-                    it: "Messaggi di sistema in formato JSON",
-                    es: "Mensajes del sistema como JSON",
-                    pl: "Wiadomości systemowe w formacie JSON",
-                    uk: "Системні повідомлення у форматі JSON",
-                    "zh-cn": "系统消息（JSON 格式）",
-                },
-                type: "string",
-                role: "json",
-                write: false,
-                read: true,
-                def: JSON.stringify({}),
-            };
-            await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
-        }
-        await this.setState(path, { val: JSON.stringify(records), ack: true });
     }
 
     async onSunseekerNotice({ sn, notice }) {
@@ -792,7 +825,7 @@ class SunseekerAdapter extends utils.Adapter {
             //Why is there a difference?
         }
         if (count_custom > 0) {
-            this.setState(`${this.namespace}.${sn}.zones.setAllCustomRaw`, {
+            this.setState(`${this.namespace}.${sn}.map.zones.setAllCustomRaw`, {
                 val: JSON.stringify(data.custom),
                 ack: true,
             });
@@ -1860,7 +1893,7 @@ class SunseekerAdapter extends utils.Adapter {
                             this.regionId[sn].push(region.id);
                         }
                         //ToDo search active region_id
-                        if (!this.createObjectDone[`${sn}.schedule.zones_available`]) {
+                        if (this.createObjectDone[`${sn}.schedule.zones_available`]) {
                             await this.setState(`${this.namespace}.${sn}.schedule.zones_available`, {
                                 val: JSON.stringify(this.regionId[sn]),
                                 ack: true,
@@ -1882,6 +1915,10 @@ class SunseekerAdapter extends utils.Adapter {
                             "zh-cn": "Zones",
                         },
                         forceIndex: true,
+                        roles: {
+                            id: "value",
+                            mapId: "value",
+                        },
                     });
                     const zone = Object.keys(map_info.region_work).length;
                     const zone_obj = await this.loadChannels(sn, "map.zones.0", false);
