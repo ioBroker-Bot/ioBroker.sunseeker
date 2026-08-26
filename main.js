@@ -721,7 +721,6 @@ class SunseekerAdapter extends utils.Adapter {
             await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
         }
         await this.setState(path, { val: JSON.stringify(records), ack: true });
-        //ToDo Interval for update
     }
 
     async onSunseekerNotice({ sn, notice }) {
@@ -1861,10 +1860,12 @@ class SunseekerAdapter extends utils.Adapter {
                             this.regionId[sn].push(region.id);
                         }
                         //ToDo search active region_id
-                        await this.setState(`${this.namespace}.${sn}.schedule.zones_available`, {
-                            val: JSON.stringify(this.regionId[sn]),
-                            ack: true,
-                        });
+                        if (!this.createObjectDone[`${sn}.schedule.zones_available`]) {
+                            await this.setState(`${this.namespace}.${sn}.schedule.zones_available`, {
+                                val: JSON.stringify(this.regionId[sn]),
+                                ack: true,
+                            });
+                        }
                     }
                     await this.json2iob.parse(`${sn}.map.zones`, map_info.region_work, {
                         channelName: {
@@ -3174,6 +3175,10 @@ class SunseekerAdapter extends utils.Adapter {
                     return;
                 }
                 const day = d.period[0];
+                if (day === null) {
+                    this.log.info(`Schedule is null!`);
+                    return;
+                }
                 const mower_time_start = this.getTimeString(d.start);
                 const mower_time_end = this.getTimeString(d.end);
                 let path_start = `${sn}.schedule.${day_channel[day]}_1.start`;
