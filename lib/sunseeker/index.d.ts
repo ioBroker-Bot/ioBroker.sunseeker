@@ -137,6 +137,7 @@ declare class Sunseeker extends EventEmitter {
     createLivemapSettings(sn: string): Promise<void>;
     createCustomMultiAngle(sn: string, path: string): Promise<void>;
     setCustomMultiAngle(sn: string, data: any, path: string): Promise<void>;
+    availableMessageSettings(message: string): Promise<any>;
 }
 
 export = Sunseeker;

@@ -759,26 +759,8 @@ class SunseekerAdapter extends utils.Adapter {
     async onSunseekerNotice({ sn, notice }) {
         const cleanup = this.removeNull(notice);
         this.log.debug(`onSunseekerNotice: ${JSON.stringify(cleanup)}`);
-        if (cleanup) {
+        if (cleanup && this.sunseeker) {
             this.notice[sn] = cleanup;
-            //ToDo check settings
-            await this.json2iob.parse(`${sn}.notice`, cleanup, {
-                channelName: {
-                    en: "Notice Settings",
-                    de: "Benachrichtigungseinstellungen",
-                    ru: "Уведомление о настройках",
-                    pt: "Configurações de aviso",
-                    nl: "Meldingsinstellingen",
-                    fr: "Paramètres de notification",
-                    it: "Impostazioni notifiche",
-                    es: "Configuración de avisos",
-                    pl: "Ustawienia powiadomień",
-                    uk: "Налаштування сповіщень",
-                    "zh-cn": "通知设置",
-                },
-                forceIndex: true,
-                write: true,
-            });
             const path = `${sn}.notice`;
             if (!this.createObjectDone[path] && this.sunseeker) {
                 this.createObjectDone[path] = true;
@@ -806,6 +788,26 @@ class SunseekerAdapter extends utils.Adapter {
                     true,
                     null,
                 );
+            }
+            for (const message in cleanup) {
+                const name = await this.sunseeker.availableMessageSettings(message);
+                if (typeof name === "object") {
+                    await this.setObjectNotExistsAsync(`${this.namespace}.${path}.${message}`, {
+                        type: "state",
+                        common: {
+                            name: name,
+                            type: "boolean",
+                            role: "switch",
+                            write: true,
+                            read: true,
+                            def: false,
+                        },
+                        native: {},
+                    }).catch(error => {
+                        this.log.error(`notice: ${error.name}: ${error.message}`);
+                    });
+                    await this.setState(`${this.namespace}.${path}.${message}`, { val: cleanup[message], ack: true });
+                }
             }
         }
     }
@@ -3213,7 +3215,7 @@ class SunseekerAdapter extends utils.Adapter {
                 }
                 const day = d.period[0];
                 if (day === null) {
-                    this.log.info(`Schedule is null!`);
+                    this.log.debug(`Schedule is null!`);
                     return;
                 }
                 const mower_time_start = this.getTimeString(d.start);
@@ -3459,6 +3461,7 @@ class SunseekerAdapter extends utils.Adapter {
             roles: {
                 mapUrl: "text.url",
                 thumbnailUrl: "text.url",
+                mapId: "value",
             },
         });
         let common;
