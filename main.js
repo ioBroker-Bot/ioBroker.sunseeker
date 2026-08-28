@@ -788,6 +788,34 @@ class SunseekerAdapter extends utils.Adapter {
                     true,
                     null,
                 );
+                const common_state = {
+                    name: {
+                        en: "Reload settings",
+                        de: "Einstellungen neu laden",
+                        ru: "Перезагрузить настройки",
+                        pt: "Recarregar configurações",
+                        nl: "Instellingen opnieuw laden",
+                        fr: "Recharger les paramètres",
+                        it: "Ricarica le impostazioni",
+                        es: "Recargar configuración",
+                        pl: "Załaduj ponownie ustawienia",
+                        uk: "Перезавантажити налаштування",
+                        "zh-cn": "重新加载设置",
+                    },
+                    type: "boolean",
+                    role: "button",
+                    write: true,
+                    read: false,
+                    def: false,
+                };
+                await this.sunseeker.createDataPoint(
+                    `${this.namespace}.${sn}.notice.update`,
+                    common_state,
+                    "state",
+                    null,
+                    true,
+                    null,
+                );
             }
             for (const message in cleanup) {
                 const name = await this.sunseeker.availableMessageSettings(message);
@@ -2105,6 +2133,11 @@ class SunseekerAdapter extends utils.Adapter {
                 const sn_notice = parts[noticeIdx - 1];
                 if (sn_notice && this.notice[sn_notice]) {
                     const noticeName = parts[noticeIdx + 1];
+                    if (noticeName === "update") {
+                        this.sunseeker.getNotice(sn_notice);
+                        this.setState(id, { val: false, ack: true });
+                        return;
+                    }
                     const sendJson = {};
                     if (noticeName && this.notice[sn_notice][noticeName] != null) {
                         sendJson[noticeName] = state.val;
