@@ -4,6 +4,8 @@
     "Password": "Passwort",
     "Polling Interval (Seconds)": "Abfrageintervall (Sekunden)",
     "Region": "Region",
+    "Request limit": "HTTPS-Anfragelimit (500–3500)",
+    "Request limit tip": "Als persönlicher Schutz und vor fehlerhaftem JavaScript oder Adapterproblemen",
     "Username / E-Mail": "Benutzername / E-Mail",
     "deleteCloud": "Sitzungsdaten löschen",
     "deleteCloudTip": "Sitzungsdaten löschen (bei Login-Probleme)",

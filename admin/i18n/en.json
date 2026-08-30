@@ -10,5 +10,7 @@
     "deleteCloud": "Delete session data",
     "deleteMqttTip": "Delete mqtt data (in case of mqtt problems)",
     "deleteMqtt": "Delete mqtt data",
-    "sessionDelete": "Caution – Only delete if a connection cannot be established!!!!"
+    "sessionDelete": "Caution – Only delete if a connection cannot be established!!!!",
+    "Request limit": "HTTPS Request Limit (500-3500)",
+    "Request limit tip": "As a personal protection and against faulty JavaScript or adapter issues"
 }

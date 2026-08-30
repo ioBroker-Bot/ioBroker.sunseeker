@@ -4,6 +4,8 @@
     "Password": "Wachtwoord",
     "Polling Interval (Seconds)": "Polling-interval (seconden)",
     "Region": "Regio",
+    "Request limit": "HTTPS-verzoeklimiet (500-3500)",
+    "Request limit tip": "Als persoonlijke bescherming en tegen defecte JavaScript- of adapterproblemen",
     "Username / E-Mail": "Gebruikersnaam / E-mailadres",
     "deleteCloud": "Sessiegegevens verwijderen",
     "deleteCloudTip": "Sessiegegevens verwijderen (bij inlogproblemen)",

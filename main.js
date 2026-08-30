@@ -56,23 +56,49 @@ class SunseekerAdapter extends utils.Adapter {
         //ToDo Forced internet disconnection - Add rate limit
         this.setState("info.connection", false, true);
 
-        const reqCount = await this.getStateAsync(`rateLimit.restart`);
-        if (reqCount && reqCount.val != null && typeof reqCount.val === "string" && reqCount.val.startsWith("{")) {
-            const infoCount = JSON.parse(reqCount.val);
+        const resCount = await this.getStateAsync(`rateLimit.restart`);
+        if (resCount && resCount.val != null && typeof resCount.val === "string" && resCount.val.startsWith("{")) {
+            const infoCount = JSON.parse(resCount.val);
             if (Object.keys(infoCount).length === 4) {
                 this.log.debug(`Use old restartLimit data!`);
                 this.restartLimit = infoCount;
             }
         }
-        const diffTime = new Date().getTime() - this.restartLimit.restartLast;
-        if (diffTime > 24 * 60 * 1000 * 60 || this.restartLimit.day != this.getWeek()) {
+        const reqCount = await this.getStateAsync(`rateLimit.request`);
+        if (reqCount && reqCount.val != null && typeof reqCount.val === "string" && reqCount.val.startsWith("{")) {
+            const infoCounts = JSON.parse(reqCount.val);
+            if (Object.keys(infoCounts).length === 6) {
+                this.log.debug(`Use old requestLimit data!`);
+                this.config.request = infoCounts;
+            }
+        }
+        let diffTime = new Date().getTime() - this.restartLimit.restartLast;
+        const actualWeek = this.getWeek();
+        if (diffTime > 24 * 60 * 1000 * 60 || this.restartLimit.day != actualWeek) {
             this.restartLimit.restartCount = 0;
             this.restartLimit.restartLast = new Date().getTime();
             this.restartLimit.restartTime = new Date().toISOString();
-            this.restartLimit.day = this.getWeek();
+            this.restartLimit.day = actualWeek;
+        }
+        diffTime = new Date().getTime() - this.config.request.requestLast;
+        if (diffTime > 24 * 60 * 1000 * 60 || this.config.request.day != actualWeek) {
+            this.config.request.requestCount = 0;
+            this.config.request.requestLast = new Date().getTime();
+            this.config.request.requestTime = new Date().toISOString();
+            this.config.request.request = [];
+            this.config.request.requestBlock = false;
+            this.config.request.day = actualWeek;
+        }
+        if (this.config.request.requestBlock) {
+            if (this.config.request.requestCount < this.config.ratelimit) {
+                this.config.request.requestBlock = true;
+            } else {
+                this.log.warn(`The request limit of ${this.config.ratelimit} per day has been reached.`);
+                return;
+            }
         }
         if (this.restartLimit.restartCount > 10) {
-            this.log.warn(`The restart limit of 10 per day has been reached.`);
+            this.log.warn(`The restart limit of ${this.config.restartlimit} per day has been reached.`);
             return;
         }
         ++this.restartLimit.restartCount;
@@ -373,9 +399,12 @@ class SunseekerAdapter extends utils.Adapter {
             if (this.sunseeker) {
                 common = {
                     name: d.deviceName || sn,
-                    icon: "img/schedule.png",
+                    icon: d["picUrlData"] != null ? d["picUrlData"] : "img/mower.png",
+                    statusStates: {
+                        onlineId: `${this.namespace}.${sn}.mower_raw.onlineFlag`,
+                    },
                 };
-                await this.sunseeker.createDataPoint(`${this.namespace}.${sn}`, common, "device", null, null, null);
+                await this.sunseeker.createDataPoint(`${this.namespace}.${sn}`, common, "device", null, true, null);
                 if (!this.createObjectDone["ensureScheduleStates"]) {
                     this.createObjectDone["ensureScheduleStates"] = true;
                     await this.sunseeker.ensureScheduleStates(sn);
@@ -4095,6 +4124,42 @@ class SunseekerAdapter extends utils.Adapter {
             };
             await this.sunseeker.createDataPoint(
                 `${this.namespace}.rateLimit.restart`,
+                common,
+                "state",
+                null,
+                null,
+                null,
+            );
+            common = {
+                name: {
+                    en: "HTTPS Request Limit",
+                    de: "HTTPS-Anfragelimit",
+                    ru: "Ограничение на количество HTTPS-запросов",
+                    pt: "Limite de solicitações HTTPS",
+                    nl: "HTTPS-aanvraaglimiet",
+                    fr: "Limite des requêtes HTTPS",
+                    it: "Limite delle richieste HTTPS",
+                    es: "Límite de solicitudes HTTPS",
+                    pl: "Limit żądań HTTPS",
+                    uk: "Ліміт HTTPS-запитів",
+                    "zh-cn": "HTTPS 请求限制",
+                },
+                type: "string",
+                role: "json",
+                desc: "Create by Adapter",
+                read: true,
+                write: false,
+                def: JSON.stringify({
+                    requestCount: 0,
+                    requestLast: 0,
+                    requestTime: "",
+                    requestBlock: false,
+                    day: "",
+                    request: [],
+                }),
+            };
+            await this.sunseeker.createDataPoint(
+                `${this.namespace}.rateLimit.request`,
                 common,
                 "state",
                 null,

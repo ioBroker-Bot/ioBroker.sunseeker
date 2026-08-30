@@ -4,6 +4,8 @@
     "Password": "Mot de passe",
     "Polling Interval (Seconds)": "Intervalle d'interrogation (secondes)",
     "Region": "Région",
+    "Request limit": "Limite de requêtes HTTPS (500-3 500)",
+    "Request limit tip": "Comme protection personnelle et contre les problèmes de JavaScript ou d'adaptateur défectueux",
     "Username / E-Mail": "Nom d'utilisateur / E-mail",
     "deleteCloud": "Supprimer les données de session",
     "deleteCloudTip": "Supprimer les données de session (en cas de problèmes de connexion)",

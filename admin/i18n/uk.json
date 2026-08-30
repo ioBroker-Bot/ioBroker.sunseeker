@@ -4,6 +4,8 @@
     "Password": "Пароль",
     "Polling Interval (Seconds)": "Інтервал опитування (секунди)",
     "Region": "Регіон",
+    "Request limit": "Ліміт запитів HTTPS (500-3500)",
+    "Request limit tip": "Як особистий захист і від несправного JavaScript або проблем з адаптером",
     "Username / E-Mail": "Ім'я користувача / E-Mail",
     "deleteCloud": "Видалити дані сеансу",
     "deleteCloudTip": "Видалити дані сесії (у разі проблем із входом)",

@@ -32,6 +32,8 @@ declare class Sunseeker extends EventEmitter {
     eventCodes: Record<string, string>;
     v1EventCodes: Record<string, string>;
     unloading: boolean;
+    requestLimit: Record<string, string>;
+    maxRequest: number;
 
     start(): Promise<void>;
     stop(): void;
@@ -54,6 +56,8 @@ declare class Sunseeker extends EventEmitter {
     getAppUserInfo(): Promise<any>;
     editMqttPassword(): Promise<void>;
     ownRequest(sn: string, data: any): Promise<void>;
+    requestLimitCheck(method: string | undefined | null, urlPath: string | undefined | null, data: any): Promise<void>;
+    getImages(url: string): Promise<void>;
 
     // devices.js
     loadEventCodes(language: string): void;

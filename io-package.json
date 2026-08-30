@@ -99,19 +99,63 @@
         "region": "EU",
         "apptype": "New",
         "interval": 300,
+        "ratelimit": 1000,
+        "restartlimit": 10,
+        "errorlimit": 10,
         "language": "de-DE",
         "session": {},
-        "mqtt_pw": ""
+        "mqtt_pw": "",
+        "request": {
+            "requestCount": 0,
+            "requestLast": 0,
+            "requestTime": "",
+            "requestBlock": false,
+            "day": "01-01",
+            "request": []
+        }
     },
     "encryptedNative": ["password"],
     "protectedNative": ["password"],
     "objects": [],
     "instanceObjects": [
         {
+            "_id": "",
+            "type": "meta",
+            "common": {
+                "name": {
+                    "en": "Meta storage for user files",
+                    "de": "Meta-Speicher für Benutzerdateien",
+                    "ru": "Meta Storage для файлов пользователей",
+                    "pt": "Meta de armazenamento para arquivos de usuário",
+                    "nl": "Meta opslag voor gebruikersbestanden",
+                    "fr": "Stockage Meta pour les fichiers utilisateur",
+                    "it": "Meta storage per i file utente",
+                    "es": "Meta almacenamiento para archivos de usuario",
+                    "pl": "Meta storage for user files",
+                    "uk": "Зберігання мета для файлів користувачів",
+                    "zh-cn": "用户档案的储存"
+                },
+                "type": "meta.user"
+            },
+            "native": {}
+        },
+        {
             "_id": "info",
             "type": "channel",
             "common": {
-                "name": "Information"
+                "name": {
+                    "en": "Information",
+                    "de": "Informationen",
+                    "ru": "Информация",
+                    "pt": "Informação",
+                    "nl": "Informatie",
+                    "fr": "Information",
+                    "it": "Informazioni",
+                    "es": "Información",
+                    "pl": "Informacja",
+                    "uk": "Інформація",
+                    "zh-cn": "信息"
+                }
             },
             "native": {}
         },
@@ -120,7 +164,19 @@
             "type": "state",
             "common": {
                 "role": "indicator.connected",
-                "name": "Device or service connected",
+                "name": {
+                    "en": "Device or service connected",
+                    "de": "Geräte- oder Serviceverbindung",
+                    "ru": "Устройство или сервис подключены",
+                    "pt": "Dispositivo ou serviço conectado",
+                    "nl": "Device of dienst verbonden",
+                    "fr": "Appareil ou service connecté",
+                    "it": "Dispositivo o servizio collegato",
+                    "es": "Dispositivo o servicio conectado",
+                    "pl": "Urządzenie lub usługa połączona",
+                    "uk": "Пристрої або послуги підключені",
+                    "zh-cn": "证人或有关服务"
+                },
                 "type": "boolean",
                 "read": true,
                 "write": false,

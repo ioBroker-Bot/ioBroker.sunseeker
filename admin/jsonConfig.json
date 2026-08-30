@@ -141,6 +141,20 @@
             ],
             "default": "de-DE"
         },
+        "ratelimit": {
+            "type": "number",
+            "label": "Request limit",
+            "tooltip": "Request limit tip",
+            "min": 500,
+            "max": 3500,
+            "newLine": true,
+            "xs": 12,
+            "sm": 12,
+            "md": 6,
+            "lg": 4,
+            "xl": 4,
+            "default": 1000
+        },
         "_headerAdapterDelete": {
             "type": "header",
             "text": "sessionDelete",
