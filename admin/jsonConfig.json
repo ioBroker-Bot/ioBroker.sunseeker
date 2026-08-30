@@ -146,14 +146,14 @@
             "label": "Request limit",
             "tooltip": "Request limit tip",
             "min": 500,
-            "max": 3500,
+            "max": 10000,
             "newLine": true,
             "xs": 12,
             "sm": 12,
             "md": 6,
             "lg": 4,
             "xl": 4,
-            "default": 1000
+            "default": 3000
         },
         "_headerAdapterDelete": {
             "type": "header",

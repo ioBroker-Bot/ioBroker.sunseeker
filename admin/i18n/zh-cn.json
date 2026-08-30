@@ -4,7 +4,7 @@
     "Password": "密码",
     "Polling Interval (Seconds)": "轮询间隔（秒）",
     "Region": "地区",
-    "Request limit": "HTTPS 请求限制 (500-3500)",
+    "Request limit": "HTTPS 请求限制 (500-10000)",
     "Request limit tip": "作为个人保护并防止错误的 JavaScript 或适配器问题",
     "Username / E-Mail": "用户名/电子邮件",
     "deleteCloud": "删除会话数据",

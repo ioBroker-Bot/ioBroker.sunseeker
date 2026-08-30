@@ -4,7 +4,7 @@
     "Password": "Пароль",
     "Polling Interval (Seconds)": "Интервал опроса (секунды)",
     "Region": "Область",
-    "Request limit": "Ограничение HTTPS-запросов (500–3500)",
+    "Request limit": "Ограничение HTTPS-запросов (500–10000)",
     "Request limit tip": "В качестве личной защиты и от ошибок JavaScript или проблем с адаптером.",
     "Username / E-Mail": "Имя пользователя / электронная почта",
     "deleteCloud": "Удалить данные сеанса",
