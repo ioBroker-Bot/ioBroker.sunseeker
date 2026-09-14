@@ -36,7 +36,7 @@ declare class Sunseeker extends EventEmitter {
     maxRequest: number;
     errorlimit: number;
 
-    start(): Promise<void>;
+    start(): Promise<boolean>;
     stop(): void;
     getEventCodes(modelClass: string): Record<string, string>;
 

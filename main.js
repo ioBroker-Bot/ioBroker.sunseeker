@@ -193,7 +193,11 @@ class SunseekerAdapter extends utils.Adapter {
         this.subscribeStates("*");
 
         try {
-            await this.sunseeker.start();
+            const start = await this.sunseeker.start();
+            if (!start) {
+                this.log.warn(`Cannot found device!!`);
+                return;
+            }
         } catch (err) {
             this.log.error(`Start failed: ${err.message}`);
             return;
@@ -205,6 +209,7 @@ class SunseekerAdapter extends utils.Adapter {
         } catch (err) {
             this.log.warn(`Initial-Update: ${err.message}`);
         }
+        this.checkDeviceObjectTree();
     }
 
     async sessionCheckMqtt() {
@@ -277,6 +282,26 @@ class SunseekerAdapter extends utils.Adapter {
                 language: this.config.language,
             },
         });
+    }
+
+    async checkDeviceObjectTree() {
+        try {
+            this.log.info(`Start check devices object!`);
+            const devices = await this.getDevicesAsync();
+            for (const element of devices) {
+                const id = element["_id"].split(".").pop();
+                if (this.regionsCounter[id]) {
+                    this.log.debug(`Found device ${element["_id"]}`);
+                } else {
+                    this.log.warn(
+                        `Serial number ${id} was not found. Please delete the object tree ${element["_id"]}.`,
+                    );
+                    //await this.delObjectAsync(`${id}`, { recursive: true });
+                }
+            }
+        } catch (e) {
+            this.log.error(`checkDeviceFolder: ${e}`);
+        }
     }
 
     /**
@@ -662,7 +687,7 @@ class SunseekerAdapter extends utils.Adapter {
                                 uk: "Зони",
                                 "zh-cn": "Zones",
                             },
-                            icon: "img/map.png",
+                            icon: "img/zone.png",
                         };
                         await this.sunseeker.createDataPoint(
                             `${this.namespace}.${path}.zones`,
@@ -1980,17 +2005,20 @@ class SunseekerAdapter extends utils.Adapter {
                         this.regionsCounter[sn].passage = map_info.region_channel.length;
                         await this.json2iob.parse(`${sn}.map.passages`, map_info.region_channel, {
                             channelName: {
-                                en: "Passage areas",
-                                de: "Durchgangsbereiche",
-                                ru: "Проходы",
-                                pt: "Áreas de passagem",
-                                nl: "Doorgangsgebieden",
-                                fr: "Zones de passage",
-                                it: "aree di passaggio",
-                                es: "Zonas de paso",
-                                pl: "Obszary przejść",
-                                uk: "Прохідні зони",
-                                "zh-cn": "通道区域",
+                                name: {
+                                    en: "Passage areas",
+                                    de: "Durchgangsbereiche",
+                                    ru: "Проходы",
+                                    pt: "Áreas de passagem",
+                                    nl: "Doorgangsgebieden",
+                                    fr: "Zones de passage",
+                                    it: "aree di passaggio",
+                                    es: "Zonas de paso",
+                                    pl: "Obszary przejść",
+                                    uk: "Прохідні зони",
+                                    "zh-cn": "通道区域",
+                                },
+                                icon: "img/passage.png",
                             },
                             forceIndex: true,
                         });
@@ -2029,14 +2057,6 @@ class SunseekerAdapter extends utils.Adapter {
                             name_p,
                             this.createObjectDone,
                         );
-                        if (!this.createObjectDone[`${sn}.map.passages`]) {
-                            this.createObjectDone[`${sn}.map.passages`] = true;
-                            await this.extendObject(`${sn}.map.passages`, {
-                                common: {
-                                    icon: "img/passage.png",
-                                },
-                            });
-                        }
                     } else {
                         //ToDo delete all, create, edit
                         //{"appId":"14","cmd":"draw_passage","deviceSn":"12","id":"drawPassage","method":"action","points":[[-5.168,2.105],[-2.987,-0.076]]}
@@ -2057,17 +2077,20 @@ class SunseekerAdapter extends utils.Adapter {
                         this.regionsCounter[sn].forbidden = map_info.region_forbidden.length;
                         await this.json2iob.parse(`${sn}.map.forbidden`, map_info.region_forbidden, {
                             channelName: {
-                                en: "Forbidden areas",
-                                de: "Verbotene Bereiche",
-                                ru: "Запретные зоны",
-                                pt: "Áreas proibidas",
-                                nl: "Verboden gebieden",
-                                fr: "Zones interdites",
-                                it: "Aree proibite",
-                                es: "Zonas prohibidas",
-                                pl: "Zakazane obszary",
-                                uk: "Заборонені зони",
-                                "zh-cn": "禁区",
+                                name: {
+                                    en: "Forbidden areas",
+                                    de: "Verbotene Bereiche",
+                                    ru: "Запретные зоны",
+                                    pt: "Áreas proibidas",
+                                    nl: "Verboden gebieden",
+                                    fr: "Zones interdites",
+                                    it: "Aree proibite",
+                                    es: "Zonas prohibidas",
+                                    pl: "Zakazane obszary",
+                                    uk: "Заборонені зони",
+                                    "zh-cn": "禁区",
+                                },
+                                icon: "img/forbidden.png",
                             },
                             forceIndex: true,
                         });
@@ -2106,14 +2129,6 @@ class SunseekerAdapter extends utils.Adapter {
                             name_f,
                             this.createObjectDone,
                         );
-                        if (!this.createObjectDone[`${sn}.map.forbidden`]) {
-                            this.createObjectDone[`${sn}.map.forbidden`] = true;
-                            await this.extendObject(`${sn}.map.forbidden`, {
-                                common: {
-                                    icon: "img/forbidden.png",
-                                },
-                            });
-                        }
                     } else {
                         //ToDo delete all, create, edit
                         //forbidden tag 2 and type normal
@@ -2136,17 +2151,20 @@ class SunseekerAdapter extends utils.Adapter {
                         this.regionsCounter[sn].obstacle = map_info.region_obstacle.length;
                         await this.json2iob.parse(`${sn}.map.obstacles`, map_info.region_obstacle, {
                             channelName: {
-                                en: "Obstacles",
-                                de: "Hindernisse",
-                                ru: "Препятствия",
-                                pt: "Obstáculos",
-                                nl: "Obstakels",
-                                fr: "Obstacles",
-                                it: "Ostacoli",
-                                es: "Obstáculos",
-                                pl: "Przeszkody",
-                                uk: "Перешкоди",
-                                "zh-cn": "障碍",
+                                name: {
+                                    en: "Obstacles",
+                                    de: "Hindernisse",
+                                    ru: "Препятствия",
+                                    pt: "Obstáculos",
+                                    nl: "Obstakels",
+                                    fr: "Obstacles",
+                                    it: "Ostacoli",
+                                    es: "Obstáculos",
+                                    pl: "Przeszkody",
+                                    uk: "Перешкоди",
+                                    "zh-cn": "障碍",
+                                },
+                                icon: "img/obstacle.png",
                             },
                             forceIndex: true,
                         });
@@ -2185,14 +2203,6 @@ class SunseekerAdapter extends utils.Adapter {
                             name_o,
                             this.createObjectDone,
                         );
-                        if (!this.createObjectDone[`${sn}.map.obstacles`]) {
-                            this.createObjectDone[`${sn}.map.obstacles`] = true;
-                            await this.extendObject(`${sn}.map.obstacles`, {
-                                common: {
-                                    icon: "img/obstacle.png",
-                                },
-                            });
-                        }
                     } else {
                         if (this.regionsCounter[sn].obstacle > 0) {
                             this.regionsCounter[sn].obstacle = 0;
@@ -2211,17 +2221,20 @@ class SunseekerAdapter extends utils.Adapter {
                         this.regionsCounter[sn].placed = map_info.region_placed_blank.length;
                         await this.json2iob.parse(`${sn}.map.placed_blank`, map_info.region_placed_blank, {
                             channelName: {
-                                en: "Safe areas",
-                                de: "Sichere Bereiche",
-                                ru: "Безопасные зоны",
-                                pt: "Áreas seguras",
-                                nl: "Veilige gebieden",
-                                fr: "Zones sécurisées",
-                                it: "Zone sicure",
-                                es: "Zonas seguras",
-                                pl: "Bezpieczne obszary",
-                                uk: "Безпечні зони",
-                                "zh-cn": "安全区域",
+                                name: {
+                                    en: "Safe areas",
+                                    de: "Sichere Bereiche",
+                                    ru: "Безопасные зоны",
+                                    pt: "Áreas seguras",
+                                    nl: "Veilige gebieden",
+                                    fr: "Zones sécurisées",
+                                    it: "Zone sicure",
+                                    es: "Zonas seguras",
+                                    pl: "Bezpieczne obszary",
+                                    uk: "Безпечні зони",
+                                    "zh-cn": "安全区域",
+                                },
+                                icon: "img/placed.png",
                             },
                             forceIndex: true,
                         });
@@ -2260,14 +2273,6 @@ class SunseekerAdapter extends utils.Adapter {
                             name_pl,
                             this.createObjectDone,
                         );
-                        if (!this.createObjectDone[`${sn}.map.placed_blank`]) {
-                            this.createObjectDone[`${sn}.map.placed_blank`] = true;
-                            await this.extendObject(`${sn}.map.placed_blank`, {
-                                common: {
-                                    icon: "img/placed.png",
-                                },
-                            });
-                        }
                     } else {
                         //ToDo delete all, create, edit
                         //{"appId":"12","area_info":[{"map_id":1789068055377,"vertexs":[[-3.542,3.499],[-3.542,0.918],[-6.123,0.918],[-6.123,3.499],[-3.542,3.499]]}],"deviceSn":"12","id":"setPlacedBlankArea","key":"placed_blank_area","method":"set_property"}
@@ -2289,17 +2294,20 @@ class SunseekerAdapter extends utils.Adapter {
                         this.regionsCounter[sn].blank = map_info.region_blank.length;
                         await this.json2iob.parse(`${sn}.map.blank`, map_info.region_blank, {
                             channelName: {
-                                en: "Blank areas",
-                                de: "Leere Bereiche",
-                                ru: "Пустые участки",
-                                pt: "Áreas em branco",
-                                nl: "Lege gebieden",
-                                fr: "Zones vides",
-                                it: "Area vuota",
-                                es: "Áreas en blanco",
-                                pl: "Puste obszary",
-                                uk: "Пусті області",
-                                "zh-cn": "空白区域",
+                                name: {
+                                    en: "Blank areas",
+                                    de: "Leere Bereiche",
+                                    ru: "Пустые участки",
+                                    pt: "Áreas em branco",
+                                    nl: "Lege gebieden",
+                                    fr: "Zones vides",
+                                    it: "Area vuota",
+                                    es: "Áreas en blanco",
+                                    pl: "Puste obszary",
+                                    uk: "Пусті області",
+                                    "zh-cn": "空白区域",
+                                },
+                                icon: "img/blank.png",
                             },
                             forceIndex: true,
                         });
@@ -2338,14 +2346,6 @@ class SunseekerAdapter extends utils.Adapter {
                             name_b,
                             this.createObjectDone,
                         );
-                        if (!this.createObjectDone[`${sn}.map.blank`]) {
-                            this.createObjectDone[`${sn}.map.blank`] = true;
-                            await this.extendObject(`${sn}.map.blank`, {
-                                common: {
-                                    icon: "img/blank.png",
-                                },
-                            });
-                        }
                     } else {
                         if (this.regionsCounter[sn].blank > 0) {
                             this.regionsCounter[sn].blank = 0;
@@ -4585,17 +4585,20 @@ class SunseekerAdapter extends utils.Adapter {
         }
         await this.json2iob.parse(`${sn}.map.maps`, maps, {
             channelName: {
-                en: "Maps",
-                de: "Karten",
-                ru: "Карты",
-                pt: "Mapas",
-                nl: "Kaarten",
-                fr: "Cartes",
-                it: "Mappe",
-                es: "Mapas",
-                pl: "Mapy",
-                uk: "Карти",
-                "zh-cn": "地图",
+                name: {
+                    en: "Maps",
+                    de: "Karten",
+                    ru: "Карты",
+                    pt: "Mapas",
+                    nl: "Kaarten",
+                    fr: "Cartes",
+                    it: "Mappe",
+                    es: "Mapas",
+                    pl: "Mapy",
+                    uk: "Карти",
+                    "zh-cn": "地图",
+                },
+                icon: "img/map.png",
             },
             forceIndex: true,
             roles: {
@@ -4613,14 +4616,6 @@ class SunseekerAdapter extends utils.Adapter {
             if (map.used) {
                 used = true;
                 mapName = map.mapName;
-            }
-            path = `${sn}.map.maps`;
-            if (!this.createObjectDone[path] && this.sunseeker) {
-                this.createObjectDone[path] = true;
-                common = {
-                    icon: "img/map.png",
-                };
-                await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "channel", null, true, null);
             }
             path = `${sn}.map.maps.0${count}`;
             if (!this.createObjectDone[path] && this.sunseeker) {
