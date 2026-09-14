@@ -188,6 +188,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("fence", payload => this.onSunseekerFenceSettings(payload));
         this.sunseeker.on("theft", payload => this.onSunseekerInfoTheft(payload));
         this.sunseeker.on("position", payload => this.onSunseekerInfoPosition(payload));
+        this.sunseeker.on("clearCache", payload => this.onSunseekerClearJson2iobCache(payload));
 
         this.subscribeStates("*");
 
@@ -515,6 +516,10 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     async onSunseekerInfoPosition({ sn, pos }) {
+        if (!pos) {
+            this.log.debug(`No Anti-Theft data!`);
+            return;
+        }
         const cleanup = this.removeNull(pos);
         await this.json2iob.parse(`${sn}.antiTheft`, cleanup, {
             channelName: {
@@ -1020,6 +1025,13 @@ class SunseekerAdapter extends utils.Adapter {
             };
             await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
         }
+    }
+
+    /**
+     * @param {string} path
+     */
+    onSunseekerClearJson2iobCache(path) {
+        this.json2iob.resetCache(path);
     }
 
     async onSunseekerNotice({ sn, notice }) {
@@ -2523,6 +2535,7 @@ class SunseekerAdapter extends utils.Adapter {
                             await this.delObjectAsync(`${this.namespace}.${sn}.map.zones.0${count}`, {
                                 recursive: true,
                             });
+                            this.json2iob.resetCache(`${sn}.map.zones.0${count}`);
                             if (this.createObjectDone[`${sn}.map.zones.0${count}`]) {
                                 delete this.createObjectDone[`${sn}.map.zones.0${count}`];
                             }
@@ -2751,10 +2764,16 @@ class SunseekerAdapter extends utils.Adapter {
                         let count = patterns;
                         let save = 0;
                         for (let a = pattern; a <= patterns - 1; a++) {
-                            this.log.info(`Delete pattern: ${this.namespace}.${sn}.map.pattern.0${count}`);
-                            await this.delObjectAsync(`${this.namespace}.${sn}.map.pattern.0${count}`, {
-                                recursive: true,
-                            });
+                            this.log.info(
+                                `Delete pattern: ${this.namespace}.${sn}.map.pattern.${`0${patterns}`.slice(-2)}`,
+                            );
+                            await this.delObjectAsync(
+                                `${this.namespace}.${sn}.map.pattern.${`0${patterns}`.slice(-2)}`,
+                                {
+                                    recursive: true,
+                                },
+                            );
+                            this.json2iob.resetCache(`${sn}.map.pattern.0${count}`);
                             if (this.createObjectDone[`${sn}.map.pattern.0${count}`]) {
                                 delete this.createObjectDone[`${sn}.map.pattern.0${count}`];
                             }
@@ -3585,6 +3604,7 @@ class SunseekerAdapter extends utils.Adapter {
                                         recursive: true,
                                     },
                                 );
+                                this.json2iob.resetCache(`${sn}.map.pattern.${`0${patterns}`.slice(-2)}`);
                                 await this.setState(id, { val: false, ack: true });
                                 this.updateDeviceAfterStateChange(sn);
                             }
@@ -4554,6 +4574,7 @@ class SunseekerAdapter extends utils.Adapter {
                 await this.delObjectAsync(`${this.namespace}.${sn}.map.maps.0${count}`, {
                     recursive: true,
                 });
+                this.json2iob.resetCache(`${sn}.map.maps.0${count}`);
                 --count;
                 ++save;
                 if (save > 10) {
