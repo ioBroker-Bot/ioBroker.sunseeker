@@ -1648,7 +1648,7 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         if (id == "device_pos") {
-            this.setMowerRaw(sn, data);
+            this.setMowerRawPos(sn, data);
             return;
         }
         if (id == "setCustomizeArea") {
@@ -1753,6 +1753,29 @@ class SunseekerAdapter extends utils.Adapter {
      * @param {string} sn
      * @param {any} data
      */
+    setMowerRawPos(sn, data) {
+        this.json2iob.parse(`${sn}.mower_raw`, data, {
+            channelName: {
+                en: "All data from cloud and mqtt",
+                de: "Alle Daten aus der Cloud und MQTT",
+                ru: "Все данные поступают из облака и MQTT.",
+                pt: "Todos os dados da nuvem e do MQTT",
+                nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
+                fr: "Toutes les données proviennent du cloud et de MQTT.",
+                it: "Tutti i dati dal cloud e MQTT",
+                es: "Todos los datos provienen de la nube y MQTT.",
+                pl: "Wszystkie dane z chmury i MQTT",
+                uk: "Всі дані з хмари та mqtt",
+                "zh-cn": "所有数据均来自云端和 MQTT",
+            },
+            forceIndex: true,
+        });
+    }
+
+    /**
+     * @param {string} sn
+     * @param {any} data
+     */
     setMowerRaw(sn, data) {
         this.json2iob.parse(`${sn}.mower_raw`, data, {
             channelName: {
@@ -1776,6 +1799,7 @@ class SunseekerAdapter extends utils.Adapter {
                 url: "text.url",
             },
             states: this.statesForDevice(sn),
+            descriptions: {},
         });
     }
 
