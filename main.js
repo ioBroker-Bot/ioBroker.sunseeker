@@ -11,6 +11,7 @@
 const utils = require("@iobroker/adapter-core");
 const Json2iob = require("json2iob");
 const Sunseeker = require("./lib/sunseeker");
+const objectName = require("./lib/objectname");
 
 const ERRORTYPE_LABELS = {
     0: "normal",
@@ -1797,9 +1798,10 @@ class SunseekerAdapter extends utils.Adapter {
                 lng: "value.gps.longitude",
                 picUrl: "text.url",
                 url: "text.url",
+                region_id: "value",
             },
             states: this.statesForDevice(sn),
-            descriptions: {},
+            descriptions: objectName.MOWER_RAW_MQTT,
         });
     }
 
