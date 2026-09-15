@@ -1718,6 +1718,12 @@ class SunseekerAdapter extends utils.Adapter {
         if (data.custom_area_info) {
             data.custom_area_info = JSON.stringify(data.custom_area_info);
         }
+        if (data.select_regions_id) {
+            data.select_regions_id = JSON.stringify(data.select_regions_id);
+        }
+        if (data.select_region_id) {
+            data.select_region_id = JSON.stringify(data.select_region_id);
+        }
         if (id == "relo_status") {
             data["relo_status"] = data.status;
             delete data.status;
