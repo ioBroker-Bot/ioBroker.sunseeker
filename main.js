@@ -21,6 +21,16 @@ const ERRORTYPE_LABELS = {
     262144: "Charging power to high",
 };
 
+const LOC_STATUS = {
+    1: "Relocation",
+    2: "Location",
+};
+
+const ALGO_STATUS = {
+    0: "Route calculated",
+    1: "Position determined",
+};
+
 class SunseekerAdapter extends utils.Adapter {
     /**
      * @param {Partial<utils.AdapterOptions>} [options]
@@ -56,6 +66,8 @@ class SunseekerAdapter extends utils.Adapter {
     async onReady() {
         //ToDo Multiple MQTT connections (V! + new + old)
         //ToDo Forced internet disconnection - Add rate limit
+        // ToDo Wrong start_reason & end_reason
+        // ToDo Other interval for getDevAllProperty
         this.setState("info.connection", false, true);
 
         const resCount = await this.getStateAsync(`rateLimit.restart`);
@@ -414,6 +426,8 @@ class SunseekerAdapter extends utils.Adapter {
             errortype: { ...ERRORTYPE_LABELS },
             fault: { ...ERRORTYPE_LABELS },
             status: states,
+            relo_status: LOC_STATUS,
+            algo_status: ALGO_STATUS,
         };
     }
 
