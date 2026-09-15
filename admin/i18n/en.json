@@ -4,7 +4,7 @@
     "Password": "Password",
     "Region": "Region",
     "API": "New if your mower is wireless",
-    "Polling Interval (Seconds)": "Polling Interval (Seconds)",
+    "Polling Interval (Minutes)": "Polling Interval (Minutes)",
     "Language": "Language (Known Languages: da, de, fr, fi, pl, en)",
     "deleteCloudTip": "Delete session data (in case of login problems)",
     "deleteCloud": "Delete session data",

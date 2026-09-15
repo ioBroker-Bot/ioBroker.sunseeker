@@ -4,7 +4,7 @@
     "Error limit tip": "Limite d'erreurs de requête HTTP par jour (1-10)",
     "Language": "Langue (Langues connues: da, de, fr, fi, pl, en)",
     "Password": "Mot de passe",
-    "Polling Interval (Seconds)": "Intervalle d'interrogation (secondes)",
+    "Polling Interval (Minutes)": "Intervalle d'interrogation (minutes)",
     "Region": "Région",
     "Request limit": "Limite de requêtes HTTPS (500-10000)",
     "Request limit tip": "Comme protection personnelle et contre les problèmes de JavaScript ou d'adaptateur défectueux",

@@ -4,7 +4,7 @@
     "Error limit tip": "Foutlimiet voor HTTP-verzoeken per dag (1-10)",
     "Language": "Taal (Bekende talen: da, de, fr, fi, pl, en)",
     "Password": "Wachtwoord",
-    "Polling Interval (Seconds)": "Polling-interval (seconden)",
+    "Polling Interval (Minutes)": "Polling-interval (minuten)",
     "Region": "Regio",
     "Request limit": "HTTPS-verzoeklimiet (500-10000)",
     "Request limit tip": "Als persoonlijke bescherming en tegen defecte JavaScript- of adapterproblemen",

@@ -59,7 +59,7 @@
         },
         "interval": {
             "type": "number",
-            "label": "Polling Interval (Seconds)",
+            "label": "Polling Interval (Minutes)",
             "min": 60,
             "max": 1440,
             "newLine": true,
@@ -68,7 +68,7 @@
             "md": 6,
             "lg": 4,
             "xl": 4,
-            "default": 300
+            "default": 720
         },
         "language": {
             "type": "select",

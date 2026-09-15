@@ -4,7 +4,7 @@
     "Error limit tip": "每天 HTTP 请求错误限制 (1-10)",
     "Language": "语言（已知语言：da、de、fr、fi、pl、en）",
     "Password": "密码",
-    "Polling Interval (Seconds)": "轮询间隔（秒）",
+    "Polling Interval (Minutes)": "轮询间隔（分钟）",
     "Region": "地区",
     "Request limit": "HTTPS 请求限制 (500-10000)",
     "Request limit tip": "作为个人保护并防止错误的 JavaScript 或适配器问题",
