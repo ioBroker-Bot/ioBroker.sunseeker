@@ -603,10 +603,9 @@ class SunseekerAdapter extends utils.Adapter {
                     "zh-cn": "所有数据均来自云端和 MQTT",
                 },
                 forceIndex: true,
-                roles: {
-                    picUrl: "text.url",
-                    picUrlDetail: "text.url",
-                },
+                roles: objectName.MOWER_RAW_MQTT_ROLES,
+                units: objectName.MOWER_RAW_MQTT_UNITS,
+                descriptions: objectName.MOWER_RAW_MQTT,
             });
         }
     }
@@ -815,10 +814,9 @@ class SunseekerAdapter extends utils.Adapter {
                     "zh-cn": "所有数据均来自云端和 MQTT",
                 },
                 forceIndex: true,
-                roles: {
-                    picUrl: "text.url",
-                    picUrlDetail: "text.url",
-                },
+                roles: objectName.MOWER_RAW_MQTT_ROLES,
+                units: objectName.MOWER_RAW_MQTT_UNITS,
+                descriptions: objectName.MOWER_RAW_MQTT,
             });
             if (!this.createObjectDone[path] && this.sunseeker) {
                 this.createObjectDone[path] = true;
@@ -1511,12 +1509,9 @@ class SunseekerAdapter extends utils.Adapter {
                     "zh-cn": "所有数据均来自云端和 MQTT",
                 },
                 forceIndex: true,
-                roles: {
-                    lat: "value.gps.latitude",
-                    lng: "value.gps.longitude",
-                    picUrl: "text.url",
-                    url: "text.url",
-                },
+                roles: objectName.MOWER_RAW_MQTT_ROLES,
+                units: objectName.MOWER_RAW_MQTT_UNITS,
+                descriptions: objectName.MOWER_RAW_MQTT,
                 states,
             });
         }
@@ -1538,6 +1533,9 @@ class SunseekerAdapter extends utils.Adapter {
                     "zh-cn": "所有数据均来自云端和 MQTT",
                 },
                 forceIndex: true,
+                roles: objectName.MOWER_RAW_MQTT_ROLES,
+                units: objectName.MOWER_RAW_MQTT_UNITS,
+                descriptions: objectName.MOWER_RAW_MQTT,
                 states,
             });
             const path = `${sn}.settings.pin_old`;
@@ -1793,13 +1791,8 @@ class SunseekerAdapter extends utils.Adapter {
                 "zh-cn": "所有数据均来自云端和 MQTT",
             },
             forceIndex: true,
-            roles: {
-                lat: "value.gps.latitude",
-                lng: "value.gps.longitude",
-                picUrl: "text.url",
-                url: "text.url",
-                region_id: "value",
-            },
+            roles: objectName.MOWER_RAW_MQTT_ROLES,
+            units: objectName.MOWER_RAW_MQTT_UNITS,
             states: this.statesForDevice(sn),
             descriptions: objectName.MOWER_RAW_MQTT,
         });
