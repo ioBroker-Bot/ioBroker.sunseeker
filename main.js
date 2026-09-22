@@ -66,8 +66,9 @@ class SunseekerAdapter extends utils.Adapter {
     async onReady() {
         //ToDo Multiple MQTT connections (V! + new + old)
         //ToDo Forced internet disconnection - Add rate limit
-        // ToDo Wrong start_reason & end_reason
-        // ToDo Other interval for getDevAllProperty
+        //ToDo Wrong start_reason & end_reason
+        //ToDo Other interval for getDevAllProperty
+        //ToDo Add Pattern size
         this.setState("info.connection", false, true);
 
         const resCount = await this.getStateAsync(`rateLimit.restart`);
@@ -202,6 +203,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("theft", payload => this.onSunseekerInfoTheft(payload));
         this.sunseeker.on("position", payload => this.onSunseekerInfoPosition(payload));
         this.sunseeker.on("clearCache", payload => this.onSunseekerClearJson2iobCache(payload));
+        this.sunseeker.on("previewmap", payload => this.onSunseekerPreviewMap(payload));
 
         this.subscribeStates("*");
 
@@ -1995,6 +1997,20 @@ class SunseekerAdapter extends utils.Adapter {
         await this.setState(`auth.session`, { val: JSON.stringify(obj), ack: true });
     }
 
+    async onSunseekerPreviewMap({ sn, dataUrl, region }) {
+        let path = "";
+        if (region === "region_channel") {
+            path = `${sn}.map.passages.passage_map`;
+        } else if (region === "region_forbidden") {
+            path = `${sn}.map.forbidden.forbidden_map`;
+        } else if (region === "region_placed_blank") {
+            path = `${sn}.map.placed_blank.placed_blank_map`;
+        } else if (region === "region_obstacle") {
+            path = `${sn}.map.obstacles.obstacle_map`;
+        }
+        this.setState(path, dataUrl, true);
+    }
+
     async onSunseekerLivemap({ sn, dataUrl }) {
         const path = `${sn}.map.livemap`;
         if (!this.createObjectDone[path] && this.sunseeker) {
@@ -2101,11 +2117,111 @@ class SunseekerAdapter extends utils.Adapter {
                         //{"appId":"14","cmd":"draw_passage","deviceSn":"12","id":"drawPassage","method":"action","points":[[-5.168,2.105],[-2.987,-0.076]]}
                         if (this.regionsCounter[sn].passage > 0) {
                             this.regionsCounter[sn].passage = 0;
-                            await this.delObjectAsync(`${this.namespace}.${sn}.map.passages`, {
-                                recursive: true,
-                            });
-                            delete this.createObjectDone[`${sn}.map.passages`];
                         }
+                    }
+                    const rc_path = `${sn}.map.passages`;
+                    if (!this.createObjectDone[rc_path]) {
+                        this.createObjectDone[rc_path] = true;
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.passages`, {
+                            type: "channel",
+                            common: {
+                                name: {
+                                    en: "Passage areas",
+                                    de: "Durchgangsbereiche",
+                                    ru: "Проходы",
+                                    pt: "Áreas de passagem",
+                                    nl: "Doorgangsgebieden",
+                                    fr: "Zones de passage",
+                                    it: "aree di passaggio",
+                                    es: "Zonas de paso",
+                                    pl: "Obszary przejść",
+                                    uk: "Прохідні зони",
+                                    "zh-cn": "通道区域",
+                                },
+                                icon: "img/passage.png",
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Region channel create: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.passages.passage_create`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Create passage area",
+                                    de: "Durchgangsbereich schaffen",
+                                    ru: "Создать проходную зону",
+                                    pt: "Criar área de passagem",
+                                    nl: "Creëer een doorgangsgebied",
+                                    fr: "Créer une zone de passage",
+                                    it: "Creare un'area di passaggio",
+                                    es: "Crear área de paso",
+                                    pl: "Utwórz obszar przejścia",
+                                    uk: "Створіть зону для проходу",
+                                    "zh-cn": "创建通道区域",
+                                },
+                                type: "boolean",
+                                role: "button",
+                                write: true,
+                                read: false,
+                                def: false,
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Region channel create: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.passages.passage_map`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Map",
+                                    de: "Karte",
+                                    ru: "Карта",
+                                    pt: "Mapa",
+                                    nl: "Kaart",
+                                    fr: "Carte",
+                                    it: "Mappa",
+                                    es: "Mapa",
+                                    pl: "Mapa",
+                                    uk: "Карта",
+                                    "zh-cn": "地图",
+                                },
+                                type: "string",
+                                role: "text",
+                                write: false,
+                                read: true,
+                                def: "",
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Region channel: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.passages.passage_points`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Points for the passage area",
+                                    de: "Punkte für den Durchgangsbereich",
+                                    ru: "Точки для прохода",
+                                    pt: "Pontos para a área de passagem",
+                                    nl: "Punten voor het doorgangsgebied",
+                                    fr: "Points pour la zone de passage",
+                                    it: "Punti per l'area di passaggio",
+                                    es: "Puntos para la zona de paso",
+                                    pl: "Punkty za obszar przejścia",
+                                    uk: "Очки для зони проходу",
+                                    "zh-cn": "通道区域的积分",
+                                },
+                                type: "string",
+                                role: "json",
+                                write: true,
+                                read: true,
+                                def: JSON.stringify([]),
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Region channel create: ${error.name}: ${error.message}`);
+                        });
                     }
                 }
                 if (map_info && map_info.region_forbidden) {
@@ -2169,17 +2285,148 @@ class SunseekerAdapter extends utils.Adapter {
                             this.createObjectDone,
                         );
                     } else {
-                        //ToDo delete all, create, edit
-                        //forbidden tag 2 and type normal
-                        //forbidden night tag 2 and type dark
-                        //forbidden wall tag 1 and type normal
                         if (this.regionsCounter[sn].forbidden > 0) {
                             this.regionsCounter[sn].forbidden = 0;
-                            await this.delObjectAsync(`${this.namespace}.${sn}.map.forbidden`, {
-                                recursive: true,
-                            });
-                            delete this.createObjectDone[`${sn}.map.forbidden`];
                         }
+                    }
+                    //ToDo delete all, create, edit
+                    //forbidden tag 2 and type normal
+                    //forbidden night tag 2 and type dark
+                    //forbidden wall tag 1 and type normal
+                    const forb_path = `${sn}.map.forbidden`;
+                    if (!this.createObjectDone[forb_path]) {
+                        this.createObjectDone[forb_path] = true;
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.forbidden`, {
+                            type: "channel",
+                            common: {
+                                name: {
+                                    en: "Forbidden areas",
+                                    de: "Verbotene Bereiche",
+                                    ru: "Запретные зоны",
+                                    pt: "Áreas proibidas",
+                                    nl: "Verboden gebieden",
+                                    fr: "Zones interdites",
+                                    it: "Aree proibite",
+                                    es: "Zonas prohibidas",
+                                    pl: "Zakazane obszary",
+                                    uk: "Заборонені зони",
+                                    "zh-cn": "禁区",
+                                },
+                                icon: "img/forbidden.png",
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Forbidden create: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.forbidden.forbidden_points`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Points for the forbidden area",
+                                    de: "Punkte für den verbotenen Bereich",
+                                    ru: "Баллы за запретную зону",
+                                    pt: "Pontos para a área proibida",
+                                    nl: "Punten voor het verboden gebied",
+                                    fr: "Points pour la zone interdite",
+                                    it: "Punti per l'area proibita",
+                                    es: "Puntos para la zona prohibida",
+                                    pl: "Punkty za obszar zabroniony",
+                                    uk: "Очки за заборонену зону",
+                                    "zh-cn": "禁区得分",
+                                },
+                                type: "string",
+                                role: "json",
+                                write: true,
+                                read: true,
+                                def: JSON.stringify([]),
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Forbidden create: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.forbidden.forbidden_create`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Create forbidden area",
+                                    de: "Sperrzone erstellen",
+                                    ru: "Создать запретную зону",
+                                    pt: "Criar área proibida",
+                                    nl: "Maak een verboden gebied aan.",
+                                    fr: "Créer une zone interdite",
+                                    it: "Creare un'area proibita",
+                                    es: "Crear zona prohibida",
+                                    pl: "Utwórz obszar zabroniony",
+                                    uk: "Створити заборонену зону",
+                                    "zh-cn": "创建禁区",
+                                },
+                                type: "boolean",
+                                role: "button",
+                                write: true,
+                                read: false,
+                                def: false,
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Forbidden create: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.forbidden.forbidden_type`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Which type should be created?",
+                                    de: "Welcher Typ soll erstellt werden?",
+                                    ru: "Какой тип следует создать?",
+                                    pt: "Que tipo deve ser criado?",
+                                    nl: "Welk type moet worden aangemaakt?",
+                                    fr: "Quel type faut-il créer ?",
+                                    it: "Quale tipo dovrebbe essere creato?",
+                                    es: "¿Qué tipo debería crearse?",
+                                    pl: "Jaki typ powinien zostać utworzony?",
+                                    uk: "Який тип слід створити?",
+                                    "zh-cn": "应该创建哪种类型？",
+                                },
+                                type: "string",
+                                role: "state",
+                                write: true,
+                                read: true,
+                                def: "default",
+                                states: {
+                                    default: "Generally",
+                                    dark: "Nighttime",
+                                    wall: "Virtual wall",
+                                },
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Forbidden create: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.forbidden.forbidden_map`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Map",
+                                    de: "Karte",
+                                    ru: "Карта",
+                                    pt: "Mapa",
+                                    nl: "Kaart",
+                                    fr: "Carte",
+                                    it: "Mappa",
+                                    es: "Mapa",
+                                    pl: "Mapa",
+                                    uk: "Карта",
+                                    "zh-cn": "地图",
+                                },
+                                type: "string",
+                                role: "text",
+                                write: false,
+                                read: true,
+                                def: "",
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Forbidden create: ${error.name}: ${error.message}`);
+                        });
                     }
                 }
                 if (map_info && map_info.region_obstacle) {
@@ -2245,11 +2492,111 @@ class SunseekerAdapter extends utils.Adapter {
                     } else {
                         if (this.regionsCounter[sn].obstacle > 0) {
                             this.regionsCounter[sn].obstacle = 0;
-                            await this.delObjectAsync(`${this.namespace}.${sn}.map.obstacles`, {
-                                recursive: true,
-                            });
-                            delete this.createObjectDone[`${sn}.map.obstacles`];
                         }
+                    }
+                    const ob_path = `${sn}.map.obstacles`;
+                    if (!this.createObjectDone[ob_path]) {
+                        this.createObjectDone[ob_path] = true;
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.obstacles`, {
+                            type: "channel",
+                            common: {
+                                name: {
+                                    en: "Obstacles",
+                                    de: "Hindernisse",
+                                    ru: "Препятствия",
+                                    pt: "Obstáculos",
+                                    nl: "Obstakels",
+                                    fr: "Obstacles",
+                                    it: "Ostacoli",
+                                    es: "Obstáculos",
+                                    pl: "Przeszkody",
+                                    uk: "Перешкоди",
+                                    "zh-cn": "障碍",
+                                },
+                                icon: "img/obstacle.png",
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Obstacle create: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.obstacles.obstacle_create`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Create obstacle area",
+                                    de: "Hindernisbereich erstellen",
+                                    ru: "Создайте зону препятствий",
+                                    pt: "Criar área de obstáculos",
+                                    nl: "Creëer een hindernisgebied",
+                                    fr: "Créer une zone d'obstacles",
+                                    it: "Creare un'area di ostacolo",
+                                    es: "Crear zona de obstáculos",
+                                    pl: "Utwórz obszar przeszkód",
+                                    uk: "Створіть зону перешкод",
+                                    "zh-cn": "创建障碍区域",
+                                },
+                                type: "boolean",
+                                role: "button",
+                                write: true,
+                                read: false,
+                                def: false,
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Obstacle create: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.obstacles.obstacle_map`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Map",
+                                    de: "Karte",
+                                    ru: "Карта",
+                                    pt: "Mapa",
+                                    nl: "Kaart",
+                                    fr: "Carte",
+                                    it: "Mappa",
+                                    es: "Mapa",
+                                    pl: "Mapa",
+                                    uk: "Карта",
+                                    "zh-cn": "地图",
+                                },
+                                type: "string",
+                                role: "text",
+                                write: false,
+                                read: true,
+                                def: "",
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Obstacle: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.obstacles.obstacle_points`, {
+                            type: "state",
+                            common: {
+                                name: {
+                                    en: "Points for the obstacle area",
+                                    de: "Punkte für den Hindernisbereich",
+                                    ru: "Баллы за зону препятствий",
+                                    pt: "Pontos para a área de obstáculos",
+                                    nl: "Punten voor het hindernisgebied",
+                                    fr: "Points pour la zone d'obstacles",
+                                    it: "Punti per l'area degli ostacoli",
+                                    es: "Puntos para la zona de obstáculos",
+                                    pl: "Punkty za obszar przeszkód",
+                                    uk: "Очки за зону перешкод",
+                                    "zh-cn": "障碍区域得分",
+                                },
+                                type: "string",
+                                role: "json",
+                                write: true,
+                                read: true,
+                                def: JSON.stringify([]),
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Obstacle: ${error.name}: ${error.message}`);
+                        });
                     }
                 }
                 if (map_info && map_info.region_placed_blank) {
@@ -2317,11 +2664,120 @@ class SunseekerAdapter extends utils.Adapter {
                         //{"appId":"12","area_info":[{"map_id":1789068055377,"vertexs":[[-3.542,3.499],[-3.542,0.918],[-6.123,0.918],[-6.123,3.499],[-3.542,3.499]]}],"deviceSn":"12","id":"setPlacedBlankArea","key":"placed_blank_area","method":"set_property"}
                         if (this.regionsCounter[sn].placed > 0) {
                             this.regionsCounter[sn].placed = 0;
-                            await this.delObjectAsync(`${this.namespace}.${sn}.map.placed_blank`, {
-                                recursive: true,
-                            });
-                            delete this.createObjectDone[`${sn}.map.placed_blank`];
                         }
+                    }
+                    const pb_path = `${sn}.map.placed_blank`;
+                    if (!this.createObjectDone[pb_path]) {
+                        this.createObjectDone[pb_path] = true;
+                        await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.placed_blank`, {
+                            type: "channel",
+                            common: {
+                                name: {
+                                    en: "Safe areas",
+                                    de: "Sichere Bereiche",
+                                    ru: "Безопасные зоны",
+                                    pt: "Áreas seguras",
+                                    nl: "Veilige gebieden",
+                                    fr: "Zones sécurisées",
+                                    it: "Zone sicure",
+                                    es: "Zonas seguras",
+                                    pl: "Bezpieczne obszary",
+                                    uk: "Безпечні зони",
+                                    "zh-cn": "安全区域",
+                                },
+                                icon: "img/placed.png",
+                            },
+                            native: {},
+                        }).catch(error => {
+                            this.log.error(`Place blank create: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(
+                            `${this.namespace}.${sn}.map.placed_blank.placed_blank_create`,
+                            {
+                                type: "state",
+                                common: {
+                                    name: {
+                                        en: "Create safe area",
+                                        de: "Sicheren Bereich schaffen",
+                                        ru: "Создайте безопасную зону",
+                                        pt: "Criar área segura",
+                                        nl: "Creëer een veilige zone",
+                                        fr: "Créer une zone sécurisée",
+                                        it: "Creare un'area sicura",
+                                        es: "Crear zona segura",
+                                        pl: "Utwórz bezpieczny obszar",
+                                        uk: "Створити безпечну зону",
+                                        "zh-cn": "创建安全区域",
+                                    },
+                                    type: "boolean",
+                                    role: "button",
+                                    write: true,
+                                    read: false,
+                                    def: false,
+                                },
+                                native: {},
+                            },
+                        ).catch(error => {
+                            this.log.error(`Place blank create: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(
+                            `${this.namespace}.${sn}.map.placed_blank.placed_blank_map`,
+                            {
+                                type: "state",
+                                common: {
+                                    name: {
+                                        en: "Map",
+                                        de: "Karte",
+                                        ru: "Карта",
+                                        pt: "Mapa",
+                                        nl: "Kaart",
+                                        fr: "Carte",
+                                        it: "Mappa",
+                                        es: "Mapa",
+                                        pl: "Mapa",
+                                        uk: "Карта",
+                                        "zh-cn": "地图",
+                                    },
+                                    type: "string",
+                                    role: "text",
+                                    write: false,
+                                    read: true,
+                                    def: "",
+                                },
+                                native: {},
+                            },
+                        ).catch(error => {
+                            this.log.error(`Place blank: ${error.name}: ${error.message}`);
+                        });
+                        await this.setObjectNotExistsAsync(
+                            `${this.namespace}.${sn}.map.placed_blank.placed_blank_points`,
+                            {
+                                type: "state",
+                                common: {
+                                    name: {
+                                        en: "Points for the safe area",
+                                        de: "Punkte für den sicheren Bereich",
+                                        ru: "Баллы за безопасную зону",
+                                        pt: "Pontos para a área segura",
+                                        nl: "Punten voor het veilige gebied",
+                                        fr: "Points pour la zone sécurisée",
+                                        it: "Punti per la zona sicura",
+                                        es: "Puntos para la zona segura",
+                                        pl: "Punkty za bezpieczną strefę",
+                                        uk: "Очки для безпечної зони",
+                                        "zh-cn": "安全区域的积分",
+                                    },
+                                    type: "string",
+                                    role: "json",
+                                    write: true,
+                                    read: true,
+                                    def: JSON.stringify([]),
+                                },
+                                native: {},
+                            },
+                        ).catch(error => {
+                            this.log.error(`Place blank: ${error.name}: ${error.message}`);
+                        });
                     }
                 }
 
@@ -2913,28 +3369,68 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         const passageIdx = parts.indexOf("passages");
-        if (passageIdx > 0 && parts[passageIdx + 2] === "delete_passage") {
+        if (passageIdx > 0) {
             const passageSn = parts[passageIdx - 2];
-            this.deleteRegion(id, passageSn, "region_channel", "passages");
-            return;
+            if (parts[passageIdx + 2] === "delete_passage") {
+                this.deleteRegion(id, passageSn, "region_channel", "passages");
+                return;
+            }
+            if (parts[passageIdx + 1] === "passage_create" && typeof state.val === "string") {
+                this.createRegion(id, passageSn, "region_channel", "passages");
+                return;
+            }
+            if (parts[passageIdx + 1] === "passage_points" && typeof state.val === "string") {
+                this.createPreviewMap(id, "region_channel", state.val, passageSn);
+                return;
+            }
         }
         const forbiddenIdx = parts.indexOf("forbidden");
-        if (forbiddenIdx > 0 && parts[forbiddenIdx + 2] === "delete_forbidden") {
+        if (forbiddenIdx > 0) {
             const forbiddenSn = parts[forbiddenIdx - 2];
-            this.deleteRegion(id, forbiddenSn, "region_forbidden", "forbidden");
-            return;
+            if (parts[forbiddenIdx + 2] === "delete_forbidden") {
+                this.deleteRegion(id, forbiddenSn, "region_forbidden", "forbidden");
+                return;
+            }
+            if (parts[forbiddenIdx + 1] === "forbidden_create" && typeof state.val === "string") {
+                this.createRegion(id, forbiddenSn, "region_forbidden", "forbidden");
+                return;
+            }
+            if (parts[forbiddenIdx + 1] === "forbidden_points" && typeof state.val === "string") {
+                this.createPreviewMap(id, "region_forbidden", state.val, forbiddenSn);
+                return;
+            }
         }
         const obstacleIdx = parts.indexOf("obstacles");
-        if (obstacleIdx > 0 && parts[obstacleIdx + 2] === "delete_obstacle") {
+        if (obstacleIdx > 0) {
             const obstacleSn = parts[obstacleIdx - 2];
-            this.deleteRegion(id, obstacleSn, "region_obstacle", "obstacles");
-            return;
+            if (parts[obstacleIdx + 2] === "delete_obstacle") {
+                this.deleteRegion(id, obstacleSn, "region_obstacle", "obstacles");
+                return;
+            }
+            if (parts[obstacleIdx + 1] === "obstacle_create" && typeof state.val === "string") {
+                this.createRegion(id, obstacleSn, "region_obstacle", "obstacles");
+                return;
+            }
+            if (parts[obstacleIdx + 1] === "obstacle_points" && typeof state.val === "string") {
+                this.createPreviewMap(id, "region_obstacle", state.val, obstacleSn);
+                return;
+            }
         }
         const placed_blankIdx = parts.indexOf("placed_blank");
-        if (placed_blankIdx > 0 && parts[placed_blankIdx + 2] === "delete_placed_blank") {
+        if (placed_blankIdx > 0) {
             const placed_blankSn = parts[placed_blankIdx - 2];
-            this.deleteRegion(id, placed_blankSn, "region_placed_blank", "placed_blank");
-            return;
+            if (parts[placed_blankIdx + 2] === "delete_placed_blank") {
+                this.deleteRegion(id, placed_blankSn, "region_placed_blank", "placed_blank");
+                return;
+            }
+            if (parts[placed_blankIdx + 1] === "placed_blank_create" && typeof state.val === "string") {
+                this.createRegion(id, placed_blankSn, "region_placed_blank", "placed_blank");
+                return;
+            }
+            if (parts[placed_blankIdx + 1] === "placed_blank_points" && typeof state.val === "string") {
+                this.createPreviewMap(id, "region_placed_blank", state.val, placed_blankSn);
+                return;
+            }
         }
         const blankIdx = parts.indexOf("blank");
         if (blankIdx > 0 && parts[blankIdx + 2] === "delete_blank") {
@@ -3423,6 +3919,209 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         this.sendRemoteCommand(id, sn, command, state);
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} region
+     * @param {string} state
+     * @param {string} sn
+     */
+    async createPreviewMap(id, region, state, sn) {
+        if (!this.sunseeker) {
+            return;
+        }
+        const meta = this.sunseeker.deviceMeta[sn];
+        if (!meta || !meta.mapJson || !meta.mapJson[region]) {
+            this.log.warn(`${sn}: Missing device meta!`);
+            return;
+        }
+        let points = [];
+        const areas = JSON.parse(JSON.stringify(meta.mapJson));
+        if (!Array.isArray(areas[region])) {
+            this.log.warn(`Cannot find region - ${region}`);
+            return;
+        }
+        if (state && typeof state === "string" && state.startsWith("[")) {
+            try {
+                points = JSON.parse(state);
+            } catch (e) {
+                this.log.warn(`Cannot parse points - ${e}`);
+                return;
+            }
+        } else {
+            this.log.warn(`Cannot found points!`);
+            return;
+        }
+        let point = {
+            points: "",
+        };
+        this.log.debug(region);
+        let type_val;
+        point.points = JSON.stringify(points);
+        switch (region) {
+            case "region_placed_blank":
+                areas[region].push(point);
+                break;
+            case "region_obstacle":
+                areas[region].push(point);
+                break;
+            case "region_forbidden":
+                type_val = await this.getStateAsync(`${sn}.map.forbidden.forbidden_type`);
+                type_val = await this.getStateAsync(`${sn}.map.forbidden.forbidden_type`);
+                if (type_val && typeof type_val === "string" && type_val != "") {
+                    point.type = type_val;
+                } else {
+                    this.log.warn(`Cannot found type!`);
+                    return;
+                }
+                point.tag = 1;
+                if (point.type == "dark") {
+                    point.tag = 2;
+                }
+                areas[region].push(point);
+                break;
+            case "region_channel":
+                areas[region].push(point);
+                break;
+            default:
+                this.log.warn(`Region ${region} is unknwon!`);
+                return;
+        }
+        if (points.length > 0) {
+            this.sunseeker.fetchMapPreview(sn, region, areas);
+            await this.setState(id, { val: state, ack: true });
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {string} region
+     * @param {string} zone
+     */
+    async createRegion(id, sn, region, zone) {
+        let points = [];
+        if (!this.sunseeker) {
+            return;
+        }
+        const meta = this.sunseeker.deviceMeta[sn];
+        if (!meta || !meta.mapJson || !meta.mapJson[region]) {
+            this.log.warn(`${sn}: Missing device meta!`);
+            return;
+        }
+        const areas = meta.mapJson[region];
+        let id_send = "";
+        let key_send = "";
+        /**
+         * type = 0 region_work -> zones -> *
+         * type = 2 region_channel -> passage area -> map.passages
+         * type = 3 region_obstacle -> obstacle area -> map.obstacles
+         * type = 4 region_forbidden -> forbidden area -> map.forbidden
+         * type = 8 region_placed_blank -> safe area -> map.placed_blank
+         * type = ? region_blank -> blank -> map.blank
+         * type = ? region_forbid_trim
+         * type = ? divide_area_work
+         */
+        let type = "";
+        let point = "";
+        let tag = 1;
+        let type_val;
+        switch (zone) {
+            case "passages":
+                point = "passage";
+                break;
+            case "forbidden":
+                type_val = await this.getStateAsync(`${sn}.map.forbidden.forbidden_type`);
+                if (type_val && typeof type_val === "string" && type_val != "") {
+                    type = type_val;
+                } else {
+                    this.log.warn(`Cannot found type!`);
+                    return;
+                }
+                point = "forbidden";
+                if (type == "dark") {
+                    tag = 2;
+                    type = "dark";
+                } else if (type == "wall") {
+                    tag = 1;
+                    type = "normal";
+                }
+                id_send = "setForbidArea";
+                key_send = "forbid_area";
+                break;
+            case "obstacles":
+                //ToDo search id & key
+                id_send = "";
+                key_send = "";
+                point = "";
+                break;
+            case "placed_blank":
+                id_send = "setPlacedBlankArea";
+                key_send = "placed_blank_area";
+                point = "placed_blank";
+                break;
+            case "blank":
+                //ToDo search type, id & key
+                id_send = "";
+                key_send = "";
+                point = "";
+                break;
+            default:
+                this.log.warn(`Type ${zone} is unknwon!`);
+        }
+        if (id_send == "") {
+            return;
+        }
+        const all = [];
+        let new_json;
+        const point_val = await this.getStateAsync(`${sn}.map.forbidden.${point}_points`);
+        if (point_val && typeof point_val.val === "string" && point_val.val.startsWith("[")) {
+            try {
+                points = JSON.parse(point_val.val);
+            } catch (e) {
+                this.log.warn(`Cannot parse points - ${e}`);
+                return;
+            }
+        } else {
+            this.log.warn(`Cannot found points!`);
+            return;
+        }
+        if (zone == "passages" && points.length > 0) {
+            this.sunseeker.sendCommand(sn, "passages", points);
+            await this.setState(id, { val: false, ack: true });
+            this.updateDeviceAfterStateChange(sn);
+            return;
+        }
+        new_json = {
+            map_id: new Date().getTime() - 58535,
+            vertexs: points,
+        };
+        if (zone == "forbidden") {
+            if (type != "") {
+                new_json["type"] = type;
+            }
+            new_json["tag"] = tag;
+        }
+        if (areas.length > 0) {
+            for (const area of areas) {
+                const map = {
+                    map_id: area.id,
+                    type: area.type,
+                    tag: area.tag,
+                    vertexs: area.points,
+                };
+                all.push(map);
+            }
+        }
+        all.push(new_json);
+        await this.sunseeker.setDeviceProperty(sn, {
+            id: id_send,
+            key: key_send,
+            area_info: all,
+        });
+        await this.setState(id, { val: false, ack: true });
+        this.updateDeviceAfterStateChange(sn);
     }
 
     /**
