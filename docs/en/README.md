@@ -4,182 +4,995 @@
 
 [Back to README](/README.md)
 
-## Configuration
+This adapter was developed and tested with two Sunnseeker S4 units. Other models should also be controllable.
+If any settings are missing, please open an issue or ask in the forum.
 
-The adapter settings expose the following fields:
+```:warning:
+ ⚠ Please do not run ioBroker and Home Assistant in parallel. If necessary, please disable `xxx.map.livemap_update` and set the interval to 1440.
+ ⚠ Faulty points can render the map unusable. Changes to the code could render the mower unusable.
+```
 
-| Field             | Description                                                  |
-| ----------------- | ------------------------------------------------------------ |
-| Username / e-mail | Sunseeker app login                                          |
-| Password          | Sunseeker app password (stored encrypted)                    |
-| Region            | `EU` or `US` (only relevant for the `New` API)               |
-| API               | `New` for current models (S/X/V/V1), `Old` for older devices |
-| Polling interval  | REST poll interval in seconds (minimum 30)                   |
-| Language          | UI and event-code language, e.g. `de-DE`, `en-EN`            |
+# Summary
 
-Which API to pick depends on the model:
+- [Instance Settings](#instance-settings)
+    - [Adapter settings](#adapter-settings)
+- [Folder structure](#folder-structure)
+- [antiTheft](#anti-theft)
+- [events](#messages)
+    - [Example of event notification](#eventnotification)
+    - [Example of daily event notification](#events)
+    - [Example system messages](#systemmessage)
+- [expert](#expert)
+- [map](#map)
+    - [Empty region](#empty-region)
+    - [Forbidden region](#forbidden-region)
+    - [Current Map Info](#current-map-info)
+    - [Livemap Settings](#livemap-settings)
+    - [Maps (Backup Maps)](#maps-backup-maps)
+    - [Obstacles](#obstacles)
+    - [Passages](#passages)
+    - [Pattern](#pattern)
+    - [Safe areas (placed_blank)](#safe-areas-placed_blank)
+    - [Overview Zones](#overview-zones)
+        - [Apply custom JSON to all zones](#setallcustomraw)
+    - [Zone](#zone)
+        - [Points](#points)
+        - [Array](#array)
+        - [Content start_mowing_selected_area](#content-start_mowing_selected_area)
+    - [Custom Zone Settings](#custom-zone-settings)
+        - [Apply custom JSON for zone settings](#setcustomraw)
+- [mower_raw](#all-data-from-the-mower-via-the-cloud-and-mqtt-connection)
+- [notice](#logs)
+- [remote](#remote-control)
+- [schedule](#schedule)
+- [settings](#settings)
+    - [Settings Multi-Angle](#settings-multi-angle)
+- [skins](#skins)
+- [communities](#communities)
+- [cards](#credit-cards)
+- [auth](#authorization)
+- [rateLimit](#request-limt)
+    - [Example Request JSON](#json-request)
+    - [Example Restart JSON](#json-restart)
 
-- `New`: all S, X, V and V1 series mowers (server `wirefree-specific.sk-robot.com` / `wirefree-specific-us.sk-robot.com`)
-- `Old`: older devices without Wirefree branding (server `server.sk-robot.com`)
+# Instance Settings
 
-## Features
+### Adapter settings
 
-- REST login (OAuth2 password grant) with automatic token refresh on a single `setInterval`.
-- Per-account device list and status/settings polling at the configured interval.
-- MQTT push:
-    - `New` API: TLS MQTT (port 1884 for SXV, 32884 for V1) with an RSA-encrypted password. After connect the adapter triggers `getDevAllProperties`, `getSelectRegionID`, `getAllPath`, `getConsumableItems` and `getFcState` via `get_property` POST so the full state is available immediately.
-    - `Old` API: plain MQTT on `mqtts.sk-robot.com:1883` with the hard-coded app user.
-- Model classification into `S`, `X`, `V` (incl. V18/V3) and `V1`. Endpoints and parameters (`cmdurl`, border mode, set-property path) are picked automatically.
-- Translated event codes: 12 language variants from the Home Assistant lang files are bundled in `lib/eventcodes.json` and attached as `common.states` to `event_code` and `errortype` (model-aware) so the ioBroker UI shows readable labels.
+[Summary](#summary)
 
-## Object tree
+| Settings                                             | Description                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Username / E-Mail`                                  | Username                                                                                                                                                                                                                                                                                                                                       |
+| `Password`                                           | Password                                                                                                                                                                                                                                                                                                                                       |
+| `Region`                                             | Select region – EU or US                                                                                                                                                                                                                                                                                                                       |
+| `New if your mower is wireless`                      | New models such as S/X/V/V1 and "Old" for mowers with boundary wires (see Readme)                                                                                                                                                                                                                                                              |
+| `Polling Interval (Minutes)`                         | With the exception of the notification setting, all data is also transmitted via the MQTT connections. You can also manually trigger an update using the `notice.update` button. If you switch to a 5-minute interval, for example, the adapter requires approximately 6,000 requests; at a 60-minute interval, it requires only 400 requests. |
+| `Language (Known Languages: da, de, fr, fi, pl, en)` | Language for user interface and event code                                                                                                                                                                                                                                                                                                     |
+| `HTTPS Request Limit (500-10000)`                    | Maximum number of requests the adapter is permitted to send per day. Protection against API changes.                                                                                                                                                                                                                                           |
+| `Adapter restart limit`                              | Maximum adapter restarts per day. Protection against API changes.                                                                                                                                                                                                                                                                              |
+| `HTTP request error limit`                           | Maximum number of requests to the cloud in the event of errors. Protection against API changes.                                                                                                                                                                                                                                                |
+| `Delete mqtt data`                                   | Delete the MQTT connection credentials and create new ones. Only do this if there are problems or if requested by a developer.                                                                                                                                                                                                                 |
+| `Delete session data`                                | Delete the access credentials for the cloud connection and create them again. Only if there are problems or at the request of a developer.                                                                                                                                                                                                     |
 
-For each mower (serial `<sn>`) the adapter creates these channels:
+![instance.png](img/instance.png)
 
-- `<sn>.mower_raw` — mower status (poll **and** MQTT push write into the same folder)
-- `<sn>.settings` — device settings
-- `<sn>.remote` — command buttons
-- `<sn>.schedule` — weekly plan (writable, see below)
-- `<sn>.events` — Mowing event log as json and manuel update button
-- `<sn>.map` — map data (only for S/X models, when available):
-    - `info` — raw response of `/wireless_map/wireless_device/get` (sizes, magnification, `mapModifyTime`, …)
-    - `zones` — Zones information
-        - `change_active_map_name`
-        - `delete_active_map_select`
-        - `delete_active_map`
-        - `save_active_map`
-        - `merge_zone`
-            - `xx.start_mowing_selected_area`
-            - `xx.name`
-            - `xx.split_zones`
-    - `image` — heatmap (PNG data URL; often empty if the cloud has not rendered one)
-    - `wifi` — WiFi signal heatmap (PNG data URL)
-    - `net` — 4G signal heatmap (PNG data URL)
-    - `texture` — raw texture map of the work area (WebP data URL)
-    - `mapData` — map geometry as raw JSON string (zones, polygons — same source HA uses to render its livemap)
-    - `pathData` — recorded mowing path as raw JSON string
-    - `backup` — backup map JSON (from `/wireless_map/backup_map/get`)
-    - `livemap` — adapter-rendered PNG data URL (zones, obstacles, recorded path, charger position; rendered with `pureimage`)
-    - `livemap_update` - livemap enable/disable (enable = +80 MB RAM)
-    - `map_settings` - Livemap settings
-        - `region_channel_fill` -
-        - `region_channel_stroke` -
-        - `region_channel_lineWidth` -
-        - `region_work_fill` -
-        - `region_work_stroke` -
-        - `region_work_lineWidth` -
-        - `region_forbidden_fill` -
-        - `region_forbidden_stroke` -
-        - `region_forbidden_lineWidth` -
-        - `region_placed_blank_fill` -
-        - `region_placed_blank_stroke` -
-        - `region_placed_blank_lineWidth` -
-        - `region_obstacle_fill` -
-        - `region_obstacle_stroke` -
-        - `region_obstacle_lineWidth` -
-        - `divide_area_work_stroke` -
-        - `divide_area_work_lineWidth` -
-        - `polyline_color` -
-        - `polyline_lineWidth` -
-        - `robot_path` -
-        - `charger_path` -
-        - `robot_charger_scale` -
-    - `maps` - All Backup Maps
-        - `mapName` — Change Map Name
-        - `useThisMap` — Restore Map
-        - `delete_select` — Selete to delete backup map
-        - `delete` — Delete Backup Map
+[Summary](#summary)
 
-Raw payloads (REST and MQTT) are written through `json2iob` directly — no parallel adapter-side data model is maintained.
+### Folder structure
 
-## Commands (`<sn>.remote.*`)
+| Object ID       | Description                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| xxx             | Mower serial number (device)                                                                              |
+| xxx.antiTheft   | Anti-theft protection (4G or GPS module)                                                                  |
+| xxx.events      | Event logs                                                                                                |
+| xxx.expert      | Visible to developers only                                                                                |
+| xxx.map         | Settings for zones, maps, areas, and patterns                                                             |
+| xxx.mower_raw   | All data from the cloud and MQTT connection (read-only)                                                   |
+| xxx.notice      | Notification settings                                                                                     |
+| xxx.remote      | Remote control                                                                                            |
+| xxx.schedule    | Mowing schedule settings. Only 2 per day are possible.                                                    |
+| xxx.settings    | General settings.                                                                                         |
+| xxx.skins       | In progress.                                                                                              |
+| xxx.communities | In progress.                                                                                              |
+| xxx.cards       | In progress.                                                                                              |
+| auth            | Access credentials and MQTT connection status.                                                            |
+| info            | Cloud and MQTT connection status. Max. 3 connections; if even one goes offline, the adapter turns yellow. |
+| rateLimit       | Rate limit information (errors are not displayed).                                                        |
 
-| State               | Effect                                          |
-| ------------------- | ----------------------------------------------- |
-| `start`             | Start mowing                                    |
-| `pause`             | Pause                                           |
-| `dock`              | Return to charging station                      |
-| `stop_find_charger` | Cancel return-to-dock                           |
-| `border`            | Border cut (V models: mode 5 with `value:true`) |
-| `stop`              | Stop                                            |
-| `stop_task`         | Cancel current task                             |
-| `restart`           | Restart task                                    |
-| `refresh`           | Reload status now                               |
-| `refresh_property`  | Reload properties now                           |
+![folderOverview.png](img/folderOverview.png)
 
-## Writable settings
+[Summary](#summary)
 
-These settings are made writable directly under `<sn>.settings.*`. Writing them sends a `set_property` / `setProperty` (model-dependent) request to the cloud:
+### Anti-theft
 
-| State                          | Range                                                          | Unit | Notes         |
-| ------------------------------ | -------------------------------------------------------------- | ---- | ------------- |
-| `bladeSpeed`                   | 2800 – 3000 (step 100)                                         | rpm  | New API only  |
-| `bladeHeight`                  | 20 – 100 (step 5)                                              | mm   | New API only  |
-| `rainFlag`                     | boolean                                                        | —    | Old + New API |
-| `rainDelayDuration`            | 0 – 720 (step 1)                                               | min  | Old + New API |
-| `night_work`                   | boolean                                                        | —    | New API only  |
-| `recharge_mode`                | 0 = direct path<br>1 = smart<br>2 = along edge                 | —    | New API only  |
-| `work_touch_mode`              | 0 = no touch<br>1 = slow touch                                 | —    | New API only  |
-| `auto_ride_edge_map_m`         | 0 = not enabled<br>1 = enabled                                 | —    | New API only  |
-| `dis_along_border`             | 0 = close<br>1 = far                                           | —    | New API only  |
-| `first_along_border`           | boolean                                                        | —    | New API only  |
-| `follow_border_freq`           | 1 = everytime<br>2 = every second time<br>3 = every third time | —    | New API only  |
-| `plan_mode`                    | 0 = default<br>1 = traceless<br>4 = multi-angle                | —    | New API only  |
-| `gap`                          | 1 = narrow<br>2 = standard<br>3 = wide                         | —    | New API only  |
-| `workSpeed`                    | 1 = slow<br>2 = standard<br>3 = fast                           | —    | New API only  |
-| `ai_sensitivity`               | 0 = low<br>1 = high                                            | —    | New API only  |
-| `dev_name`                     | Change device name                                             | —    | New API only  |
-| `energy_saving_mode`           | boolean                                                        | —    | New API only  |
-| `pin_old`                      | Change Pin Code -> Old Pin                                     | —    | New API only  |
-| `pin_new`                      | New Pin (Set the old PIN first)                                | —    | New API only  |
-| `firmware_current`             | available Firmware (readonly)                                  | —    | Old + New API |
-| `firmware_description`         | Description current or new FW (readonly)                       | —    | Old + New API |
-| `firmware_update_available`    | Available FW (Automatic check every 24 hours - readonly)       | —    | Old + New API |
-| `firmware_update_start`        | Start upgrade when available                                   | —    | Old + New API |
-| `firmware_update_check_manual` | Manual check                                                   | —    | Old + New API |
-| `custom_flag`                  | Set custom flag                                                | —    | New API only  |
-| `auto_upgrade`                 |                                                                | —    | New API only  |
-| `reset_bladeplate`             |                                                                | —    | New API only  |
-| `reset_blade`                  |                                                                | —    | New API only  |
-| `reset_smal_bladeplate`        |                                                                | —    | New API only  |
-| `reset_smal_blade`             |                                                                | —    | New API only  |
+| Object Id                      | Description                          |
+| ------------------------------ | ------------------------------------ |
+| xxx.antiTheft.batteryVoltage   | Battery voltage status               |
+| xxx.antiTheft.bindDeviceSn     | Serial number of the connected mower |
+| xxx.antiTheft.deviceOnlineFlag | Module status                        |
+| xxx.antiTheft.fence            | Digital fence size (L/M/H)           |
+| xxx.antiTheft.fenceCenterLat   | Latitude (center of digital fence)   |
+| xxx.antiTheft.fenceCenterLon   | Longitude (center of digital fence)  |
+| xxx.antiTheft.fence_digital    | Activate/deactivate digital fence    |
+| xxx.antiTheft.lastOnlineTime   | Time of last status change to online |
+| xxx.antiTheft.lastPositionTime | Time of last position update         |
 
-When writing blade values, the adapter posts `{ id: "setDevBlade", key: "blade", method: "set_property", speed|height: <int> }`. After 1.5 s a status refresh is scheduled; MQTT push usually updates the values as well.
+![antiTheft_1.png](img/antiTheft_1.png)
+![antiTheft_2.png](img/antiTheft_2.png)
+![antiTheft_3.png](img/antiTheft_3.png)
+![antiTheft_4.png](img/antiTheft_4.png)
 
-Writing `rainFlag` or `rainDelayDuration` always sends both values to the cloud (the missing one is read from the current state). The endpoint depends on the model:
+[Summary](#summary)
 
-- `Old`: `POST /app_mower/device/setRain/{sn}/{appId}` with `rainFlag` + `rainDelayDuration`.
-- `New` V1: `POST {cmdurl}setProperty` with `method: "setRain"`, `rainFlag`, `rainDelayDuration`.
-- `New` S/X/V: `POST {cmdurl}set_property` with `id: "setDevRain"`, `key: "rain"`, `rain_flag`, `delay`.
+### Messages
 
-## Schedule (`<sn>.schedule.*`)
+| Object Id                      | Description                      |
+| ------------------------------ | -------------------------------- |
+| xxx.events.eventNotification   | Event notification               |
+| xxx.events.eventUpdate         | Reload all events                |
+| xxx.events.events              | Daily events                     |
+| xxx.events.makeAllRead         | Mark all events as 'read'        |
+| xxx.events.systemMessage       | System messages                  |
+| xxx.events.unreadEventMessage  | Number of unread events          |
+| xxx.events.unreadSystemMessage | Number of unread system messages |
 
-A simple weekly plan with one window per day. The states are writable but the cloud is only updated when `set` is triggered.
+![events.png](img/events.png)
 
-| State                       | Type                                                           | Format                                                               |
-| --------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `1_monday_1` … `0_sunday_1` | string                                                         | `"HH:MM-HH:MM"` for the active window, empty string disables the day |
-| `1_monday_2` … `0_sunday_2` | string                                                         | `"HH:MM-HH:MM"` for the active window, empty string disables the day |
-| `pauseSchedule`             | boolean                                                        | Pause the schedule without clearing the windows                      |
-| `setSchedule`               | button                                                         | Sends the current values to the cloud                                |
-| `getSchedule`               | button                                                         | Load current schedule                                                |
-| `schedule_time_work_repeat` | button                                                         | Mowing cycle with schedule                                           |
-| `schedule_mode`             | 0 = no schedule</br>1 = recomended</br>1 = custom (X & S only) | Sends the current values to the cloud                                |
-| `schedule_time_zone`        | number                                                         | Timezone                                                             |
+[Summary](#summary)
 
-The dispatched payload depends on the model:
+### eventNotification
 
-- `Old` API: `POST /app_mower/device-schedule/setScheduling` with `deviceScheduleBOS` for all 7 days; `autoFlag` is the inverse of `pause`.
-- `New` V1: `POST {cmdurl}setProperty` with `method: "setSchedule"` and `deviceScheduleBOS` containing only the active days.
-- `New` S/X/V: `POST {cmdurl}set_property` with `id: "setTimeTactics"`, `key: "time_tactics"` and a `time` array (one entry per active day, day index Mon=1…Sat=6, Sun=0; start/end as seconds since midnight).
+```json
+[
+    {
+        "id": "25046fa6-7766-4ed4-87a0-952f515442ca",
+        "sn": null,
+        "workRecordId": "0",
+        "type": 2,
+        "code": "Regen erkannt",
+        "poseX": "",
+        "poseY": "",
+        "time": "1791584104176",
+        "timeStr": "2026-10-09 22:15:04",
+        "timeZoneId": "Europe/Berlin",
+        "count": null,
+        "nrtkBase": 0,
+        "firmwareVersion": "1.1.28.3103"
+    },
+    {
+        "id": "6f351d8c-9832-4e5b-b4b5-7c306151f1c9",
+        "sn": null,
+        "workRecordId": "0",
+        "type": 2,
+        "code": "Regen erkannt",
+        "poseX": "",
+        "poseY": "",
+        "time": "1791403996503",
+        "timeStr": "2026-10-07 20:13:16",
+        "timeZoneId": "Europe/Berlin",
+        "count": null,
+        "nrtkBase": 0,
+        "firmwareVersion": "1.1.28.3103"
+    },
+    {
+        "id": "917a42c4-edd1-49cc-9f2f-ebebfae9342a",
+        "sn": null,
+        "workRecordId": "0",
+        "type": 2,
+        "code": "Der Roboter lädt",
+        "poseX": "",
+        "poseY": "",
+        "time": "1791382963985",
+        "timeStr": "2026-10-07 14:22:43",
+        "timeZoneId": "Europe/Berlin",
+        "count": null,
+        "nrtkBase": 0,
+        "firmwareVersion": "1.1.28.3103"
+    }
+]
+```
 
-## Known limitations
+### events
 
-The Sunseeker API exposes far more fields than the adapter currently writes. All settings are available read-only as raw data under `<sn>.settings`. The following are **not yet** exposed as writable states:
+```json
+[
+  {
+    "id": "2087778142705917953",
+    "start": "1786598551",
+    "end": "1786600074",
+    "time": 1523,
+    "area": 49,
+    "normalDone": true,
+    "url": "https://minio.sk-robot.com/work-record/xxx_1786598551_1786600074_record.gz",
+    "sn": "xxx",
+    "subMode": 0,
+    "startReason": "Das Gerät wird neu gestartet",
+    "endReason": "Arbeit abgeschlossen. Rückkehr zur Ladestation.",
+    "timeZoneId": "",
+    "workProcessInfos": null,
+    "taskType": 3,
+    "oneshotTaskType": 0,
+    "firmwareVersion": "1.1.23.2938",
+    "targetRegions": null,
+    "workOrder": null,
+    "workProcessInfoPage": null
+  },
+  {
+    "id": "2087597114861350914",
+    "start": "1786555135",
+    "end": "1786556912",
+    "time": 1775,
+    "area": 48,
+    "normalDone": true,
+    "url": "https://minio.sk-robot.com/work-record/xxx_1786555135_1786556912_record.gz",
+    "sn": "123",
+    "subMode": 0,
+    "startReason": "Das Gerät wird neu gestartet",
+    "endReason": "Arbeit abgeschlossen. Rückkehr zur Ladestation.",
+    "timeZoneId": "",
+    "workProcessInfos": null,
+    "taskType": 3,
+    "oneshotTaskType": 0,
+    "firmwareVersion": "1.1.23.2938",
+    "targetRegions": null,
+    "workOrder": null,
+    "workProcessInfoPage": null
+  },
+  {
+    "id": "2087455142109900802",
+    "start": "1786521294",
+    "end": "1786523062",
+    "time": 1765,
+    "area": 48,
+    "normalDone": true,
+    "url": "https://minio.sk-robot.com/work-record/xxx_1786521294_1786523062_record.gz",
+    "sn": "1223",
+    "subMode": 0,
+    "startReason": "Das Gerät wird neu gestartet",
+    "endReason": "Arbeit abgeschlossen. Rückkehr zur Ladestation.",
+    "timeZoneId": "",
+    "workProcessInfos": null,
+    "taskType": 3,
+    "oneshotTaskType": 0,
+    "firmwareVersion": "1.1.23.2938",
+    "targetRegions": null,
+    "workOrder": null,
+    "workProcessInfoPage": null
+  },
+```
 
-- Zone settings (per-zone blade speed/height, ordering)
-- OTA update
-- Work records / mowing history
-- V1-specific settings: return path, screen lock, border distance, schedule on/off
-- Gen2 settings: auto_ride_edge, energy_save, night_work
-- AI sensitivity, PIN code, map operations
+### systemMessage
+
+```json
+[
+    {
+        "id": "2098292481602727980",
+        "appUserId": 12632759,
+        "title": "Aktion für 70 Beta-Tester",
+        "content": "Gehören Sie zu den Ersten, die unsere neue Technologie erleben, und gestalten Sie mit, was als Nächstes kommt.",
+        "readFlag": true,
+        "createdAt": "2026-09-11 06:07:59",
+        "messageTypeCode": "communityActivityMessage",
+        "feedbackContent": null,
+        "sendAt": "1789106879",
+        "type": 1,
+        "sn": null,
+        "userDelFlag": false,
+        "messageCode": null,
+        "nrtkBase": null
+    },
+    {
+        "id": "2084552495081664535",
+        "appUserId": 12632759,
+        "title": "Gewinnen Sie einen Sunseeker Elite X Gen 2 – Das Gewinnspiel läuft noch!",
+        "content": "Teilen Sie Ihr Feedback und gewinnen Sie mit etwas Glück X Gen 2 Mähroboter und Merchandise-Pakete. Gesamtwert der Preise: über 8.000 €.",
+        "readFlag": true,
+        "createdAt": "2026-08-04 08:10:01",
+        "messageTypeCode": "communityActivityMessage",
+        "feedbackContent": null,
+        "sendAt": "1785831001",
+        "type": 1,
+        "sn": null,
+        "userDelFlag": false,
+        "messageCode": null,
+        "nrtkBase": null
+    },
+    {
+        "id": "2083090986003931175",
+        "appUserId": 12632759,
+        "title": "Umfrage-Gewinnspiel – Gewinnen Sie einen Sunseeker Elite X Gen 2!",
+        "content": "Teilen Sie Ihr Feedback und gewinnen Sie X Gen 2 Mähroboter sowie Merchandise-Pakete. Gesamtwert der Preise: über 8.000 €.",
+        "readFlag": true,
+        "createdAt": "2026-07-31 07:22:39",
+        "messageTypeCode": "communityActivityMessage",
+        "feedbackContent": null,
+        "sendAt": "1785482559",
+        "type": 1,
+        "sn": null,
+        "userDelFlag": false,
+        "messageCode": null,
+        "nrtkBase": null
+    }
+]
+```
+
+[Summary](#summary)
+
+### Expert
+
+`Nur für Entwickler. Es ist möglich Anfragen direkt an die Cloud zu senden.`
+
+| Object Id           | Description         |
+| ------------------- | ------------------- |
+| xxx.expert.request  | Own request as JSON |
+| xxx.expert.response | Response            |
+
+![expert.png](img/expert.png)
+
+[Summary](#summary)
+
+### Map
+
+| Object Id              | Description                                   |
+| ---------------------- | --------------------------------------------- |
+| xxx.map.blank          | Empty areas                                   |
+| xxx.map.forbidden      | Forbidden zones                               |
+| xxx.map.info           | Current map info                              |
+| xxx.map.map_settings   | Live map settings                             |
+| xxx.map.maps           | Backup maps                                   |
+| xxx.map.obstacles      | Obstacles                                     |
+| xxx.map.passages       | Passages                                      |
+| xxx.map.pattern        | Pattern                                       |
+| xxx.map.placed_blank   | Safe areas                                    |
+| xxx.map.zones          | Zones                                         |
+| xxx.map.backup         | Backup maps as JSON (data for `xxx.map.maps`) |
+| xxx.map.livemap        | Live map                                      |
+| xxx.map.livemap_update | Update live map while mowing                  |
+| xxx.map.mapData        | Active map data (all points)                  |
+| xxx.map.net            | Network coverage as a map                     |
+| xxx.map.pathData       | Mowing path data                              |
+| xxx.map.texture        | Textures as a map                             |
+| xxx.map.wifi           | Wi-Fi coverage as a map                       |
+
+![mapOverview.png](img/mapOverview.png)
+
+[Summary](#summary)
+
+### Empty region
+
+| Object Id                     | Description              |
+| ----------------------------- | ------------------------ |
+| xxx.map.blank.01.delete_blank | Delete blank area        |
+| xxx.map.blank.01.id           | ID                       |
+| xxx.map.blank.01.points       | Points of the blank area |
+| xxx.map.blank.01.points_num   | Number of points         |
+
+![blank.png](img/blank.png)
+
+[Summary](#summary)
+
+### Forbidden region
+
+| Object Id                             | Description                                                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| xxx.map.forbidden.01.delete_forbidden | Delete forbidden area                                                                                       |
+| xxx.map.forbidden.01.effective_area   | Inside or outside the area                                                                                  |
+| xxx.map.forbidden.01.id               | Timestamp of when the area was created                                                                      |
+| xxx.map.forbidden.01.name             | Cannot be assigned                                                                                          |
+| xxx.map.forbidden.01.points           | Points defining the area.                                                                                   |
+| xxx.map.forbidden.01.points_num       | Number of points                                                                                            |
+| xxx.map.forbidden.01.tag              | Area tag (2+dark=night, 1+normal=wall, 2+normal=general)                                                    |
+| xxx.map.forbidden.01.type             | Area type (general, night, or wall)                                                                         |
+| xxx.map.forbidden.forbidden_create    | Create forbidden area                                                                                       |
+| xxx.map.forbidden.forbidden_map       | Map preview with points                                                                                     |
+| xxx.map.forbidden.forbidden_points    | Points as an array (e.g., points from .01.points). Creating forbidden areas via VIS is not yet implemented. |
+| xxx.map.forbidden.forbidden_type      | General, night, or wall                                                                                     |
+
+![forbidden.png](img/forbidden.png)
+
+[Summary](#summary)
+
+### Current Map Info
+
+| Object Id                    | Description                                          |
+| ---------------------------- | ---------------------------------------------------- |
+| xxx.map.info.mapModifyTime   | Last modified                                        |
+| xxx.map.info.mapPathFileName | File name                                            |
+| xxx.map.info.mapPathFileUrl  | URL link to download the current map data            |
+| xxx.map.info.realPathFileUlr | URL link to download the current mowing history data |
+
+![info.png](img/info.png)
+
+[Summary](#summary)
+
+### Livemap Settings
+
+| Object Id                                            | Description                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| xxx.map.map_settings.charger_path                    | Path to the charging station image                                        |
+| xxx.map.map_settings.charger_scale                   | Scale charging station image. The smaller the value, the larger the image |
+| xxx.map.map_settings.divide_area_work_active         | Show work area divisions on the map                                       |
+| xxx.map.map_settings.divide_area_work_lineWidth      | Line width                                                                |
+| xxx.map.map_settings.divide_area_work_stroke         | Stroke color                                                              |
+| xxx.map.map_settings.polyline_color                  | Mowing line color                                                         |
+| xxx.map.map_settings.polyline_lineWidth              | Line width                                                                |
+| xxx.map.map_settings.region_channel_active           | Show passages                                                             |
+| xxx.map.map_settings.region_channel_fill             | Fill color                                                                |
+| xxx.map.map_settings.region_channel_lineWidth        | Line width                                                                |
+| xxx.map.map_settings.region_channel_stroke           | Stroke color                                                              |
+| xxx.map.map_settings.region_forbidden_active         | View Prohibited Areas                                                     |
+| xxx.map.map_settings.region_forbidden_dark_fill      | fill color                                                                |
+| xxx.map.map_settings.region_forbidden_dark_lineWidth | Line width                                                                |
+| xxx.map.map_settings.region_forbidden_dark_stroke    | Stroke color                                                              |
+| xxx.map.map_settings.region_forbidden_fill           | fill color                                                                |
+| xxx.map.map_settings.region_forbidden_lineWidth      | Line width                                                                |
+| xxx.map.map_settings.region_forbidden_stroke         | Stroke color                                                              |
+| xxx.map.map_settings.region_forbidden_wall_fill      | fill color                                                                |
+| xxx.map.map_settings.region_forbidden_wall_lineWidth | Line width                                                                |
+| xxx.map.map_settings.region_forbidden_wall_stroke    | Stroke color                                                              |
+| xxx.map.map_settings.region_obstacle_active          | Show obstacles                                                            |
+| xxx.map.map_settings.region_obstacle_fill            | fill color                                                                |
+| xxx.map.map_settings.region_obstacle_lineWidth       | Line width                                                                |
+| xxx.map.map_settings.region_obstacle_stroke          | Stroke color                                                              |
+| xxx.map.map_settings.region_pattern_active           | Show pattern                                                              |
+| xxx.map.map_settings.region_pattern_fill             | fill color                                                                |
+| xxx.map.map_settings.region_pattern_lineWidth        | Line width                                                                |
+| xxx.map.map_settings.region_pattern_stroke           | Stroke color                                                              |
+| xxx.map.map_settings.region_placed_blank_active      | Show safe areas                                                           |
+| xxx.map.map_settings.region_placed_blank_fill        | fill color                                                                |
+| xxx.map.map_settings.region_placed_blank_lineWidth   | Line width                                                                |
+| xxx.map.map_settings.region_placed_blank_stroke      | Stroke color                                                              |
+| xxx.map.map_settings.region_work_fill                | Fill color                                                                |
+| xxx.map.map_settings.region_work_lineWidth           | Line width                                                                |
+| xxx.map.map_settings.region_work_stroke              | Stroke color                                                              |
+| xxx.map.map_settings.robot_charger_scale             | Scale mower image. The smaller the value, the larger the image            |
+| xxx.map.map_settings.robot_path                      | Path to mower image                                                       |
+
+![map_settings_1.png](img/map_settings_1.png)
+![map_settings_2.png](img/map_settings_2.png)
+
+[Summary](#summary)
+
+### Maps (Backup Maps)
+
+| Object Id                     | Description                                                             |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| xxx.map.maps.01.createTime    | Timestamp of map creation                                               |
+| xxx.map.maps.01.delete        | Delete map. Must first be confirmed via `xxx.map.maps.01.delete_select` |
+| xxx.map.maps.01.delete_select | Confirm map deletion (set to true)                                      |
+| xxx.map.maps.01.id            | ID                                                                      |
+| xxx.map.maps.01.mapArea       | Map area in m²                                                          |
+| xxx.map.maps.01.mapId         | Map ID                                                                  |
+| xxx.map.maps.01.mapName       | Map name (editable)                                                     |
+| xxx.map.maps.01.mapUrl        | Map URL                                                                 |
+| xxx.map.maps.01.sn            | Mower serial number                                                     |
+| xxx.map.maps.01.thumbnailUrl  | Thumbnail map URL                                                       |
+| xxx.map.maps.01.updateTime    | Last modification                                                       |
+| xxx.map.maps.01.useThisMap    | Use this map. The currently active map must be deleted first            |
+| xxx.map.maps.01.used          | Map active                                                              |
+
+![backupmap.png](img/backupmap.png)
+
+[Summary](#summary)
+
+### Obstacles
+
+| Object Id                            | Description                                                         |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| xxx.map.obstacles.01.delete_obstacle | Delete obstacle                                                     |
+| xxx.map.obstacles.01.effective_area  | Inside or outside the area                                          |
+| xxx.map.obstacles.01.id              | ID                                                                  |
+| xxx.map.obstacles.01.name            | No function                                                         |
+| xxx.map.obstacles.01.points          | Obstacle points                                                     |
+| xxx.map.obstacles.01.points_num      | Number of points                                                    |
+| xxx.map.obstacles.obstacle_create    | Create obstacle                                                     |
+| xxx.map.obstacles.obstacle_map       | Obstacle preview                                                    |
+| xxx.map.obstacles.obstacle_points    | Obstacle points. Creating obstacles via VIS is not yet implemented. |
+
+![obstacles.png](img/obstacles.png)
+
+[Summary](#summary)
+
+### Passages
+
+| Object Id                          | Description                                                       |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| xxx.map.passages.01.delete_passage | Delete passage                                                    |
+| xxx.map.passages.01.effective_area | Inside or outside the area                                        |
+| xxx.map.passages.01.id             | ID                                                                |
+| xxx.map.passages.01.name           | No function                                                       |
+| xxx.map.passages.01.points         | Passage points.                                                   |
+| xxx.map.passages.01.points_num     | Number of points                                                  |
+| xxx.map.passages.01.split_line     | Dividing line                                                     |
+| xxx.map.passages.passage_create    | Create passage                                                    |
+| xxx.map.passages.passage_map       | Passage preview                                                   |
+| xxx.map.passages.passage_points    | Passage points. Creating passages via VIS is not yet implemented. |
+
+![passage.png](img/passage.png)
+
+[Summary](#summary)
+
+### Pattern
+
+| Object Id                          | Description                                                                                                                                                                                     |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| xxx.map.pattern.01.area_id         | Area ID                                                                                                                                                                                         |
+| xxx.map.pattern.01.effective_area  | Inside or outside the area                                                                                                                                                                      |
+| xxx.map.pattern.01.enable          | Enable pattern                                                                                                                                                                                  |
+| xxx.map.pattern.01.expiration_time | Expiration date when the pattern is automatically deleted                                                                                                                                       |
+| xxx.map.pattern.01.id              | ID                                                                                                                                                                                              |
+| xxx.map.pattern.01.img_value       | Change pattern                                                                                                                                                                                  |
+| xxx.map.pattern.01.last_edit_time  | Timestamp of the pattern's last modification                                                                                                                                                    |
+| xxx.map.pattern.01.min_width       | Minimum size                                                                                                                                                                                    |
+| xxx.map.pattern.01.name            | No function                                                                                                                                                                                     |
+| xxx.map.pattern.01.pattern_delete  | Delete pattern                                                                                                                                                                                  |
+| xxx.map.pattern.01.points          | Pattern points (square)                                                                                                                                                                         |
+| xxx.map.pattern.01.points_num      | Number of points                                                                                                                                                                                |
+| xxx.map.pattern.create_pattern     | Create pattern. First select `delete_automatic`, `points_pattern`, and `selecte_pattern`.                                                                                                       |
+| xxx.map.pattern.delete_all_pattern | Delete all patterns.                                                                                                                                                                            |
+| xxx.map.pattern.pattern_map        | Preview.                                                                                                                                                                                        |
+| xxx.map.pattern.points_pattern     | Creating patterns via VIS is not yet implemented; the points must be entered here. Simply create a few patterns using the app and copy the points from `xxx.map.mapData` -> `region_customize`. |
+| xxx.map.pattern.delete_automatic   | Time at which the new pattern should be deleted                                                                                                                                                 |
+| xxx.map.pattern.selecte_pattern    | Select pattern                                                                                                                                                                                  |
+
+![pattern.png](img/pattern.png)
+
+[Summary](#summary)
+
+### Safe areas (placed_blank)
+
+| Object Id                                   | Description                                                                   |
+| ------------------------------------------- | ----------------------------------------------------------------------------- |
+| xxx.map.placed_blank.01.delete_placed_blank | Delete safe zone                                                              |
+| xxx.map.placed_blank.01.effective_area      | Inside or outside the zone                                                    |
+| xxx.map.placed_blank.01.id                  | ID                                                                            |
+| xxx.map.placed_blank.01.name                | No function                                                                   |
+| xxx.map.placed_blank.01.points              | Safe zone points                                                              |
+| xxx.map.placed_blank.01.points_num          | Number of points                                                              |
+| xxx.map.placed_blank.placed_blank_create    | Create safe zone using points from `xxx.map.placed_blank.placed_blank_points` |
+| xxx.map.placed_blank.placed_blank_map       | Preview using points from `xxx.map.placed_blank.placed_blank_points`          |
+| xxx.map.placed_blank.placed_blank_points    | Safe zone points. Creating zones via VIS is not yet implemented.              |
+
+![placed_blank.png](img/placed_blank.png)
+
+[Summary](#summary)
+
+### Overview Zones
+
+| Object Id                              | Description                                                                                                                   |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| xxx.map.zones.change_active_map_name   | Change map name                                                                                                               |
+| xxx.map.zones.delete_active_map        | Delete active map; `xxx.map.zones.delete_active_map_select` must be set to `true`                                             |
+| xxx.map.zones.delete_active_map_select | Set to `true` to confirm deletion, then press `delete_active_map`                                                             |
+| xxx.map.zones.merge_zones              | Merge zones, e.g., [Zone 1, Zone 2] == [1,2]                                                                                  |
+| xxx.map.zones.setAllCustomRaw          | You can also modify and send the JSON instead of changing the states                                                          |
+| xxx.map.zones.settings_all_zones       | Apply 0 for default settings (`xxx.settings.multi_angle`) for all zones, or 1 for custom settings (`xxx.map.zones.01.custom`) |
+
+# setAllCustomRaw
+
+```json
+[
+    {
+        // Zone 1
+        "work_gap": 2,
+        "region_size": 10,
+        "blade_height": 100,
+        "estimate_time": 8,
+        "blade_speed": 2800,
+        "plan_mode": 4,
+        "region_id": 1787902995078,
+        "start": 1,
+        "finish": 0,
+        "work_speed": 2,
+        "setting": false
+    },
+    {
+        // Zone 2
+        "work_gap": 2,
+        "region_size": 28,
+        "blade_height": 100,
+        "estimate_time": 22,
+        "blade_speed": 2800,
+        "plan_mode": 4,
+        "region_id": 1787903286041,
+        "start": 0,
+        "finish": 1,
+        "work_speed": 2,
+        "setting": false
+    },
+    {
+        // Zone 3
+        "work_gap": 2,
+        "region_size": 20,
+        "blade_height": 100,
+        "estimate_time": 15,
+        "blade_speed": 2800,
+        "plan_mode": 4,
+        "region_id": 1789910964606,
+        "start": 0,
+        "finish": 1,
+        "work_speed": 2,
+        "setting": false
+    }
+]
+```
+
+![zones_1.png](img/zones_1.png)
+
+[Summary](#summary)
+
+### Zone
+
+| Object Id                                   | Description                                                                                                                                                             |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| xxx.map.zones.01.area_size                  | Zone size                                                                                                                                                               |
+| xxx.map.zones.01.effective_area             | Effective area                                                                                                                                                          |
+| xxx.map.zones.01.id                         | ID                                                                                                                                                                      |
+| xxx.map.zones.01.mapId                      | Map ID                                                                                                                                                                  |
+| xxx.map.zones.01.name                       | Zone name (editable)                                                                                                                                                    |
+| xxx.map.zones.01.points                     | Zone GPS data                                                                                                                                                           |
+| xxx.map.zones.01.points_num                 | Number of GPS points                                                                                                                                                    |
+| xxx.map.zones.01.split_zones                | Split this zone using GPS data. Splitting via VIS is not yet implemented.                                                                                               |
+| xxx.map.zones.01.start_mowing_selected_area | Creating areas via VIS is not yet implemented. The path to be mowed can be obtained from `xxx.map.pathData`. Copy the desired points into an array and paste them here. |
+| xxx.map.zones.01.time_balanced              | Time-balanced (read-only)                                                                                                                                               |
+| xxx.map.zones.01.time_fine_tune             | Time fine-tuning (read-only)                                                                                                                                            |
+| xxx.map.zones.01.time_high_efficiency       | Sustained high efficiency (read-only)                                                                                                                                   |
+
+# Points
+
+```json
+[-0.3, 0.112, 11]
+```
+
+# Array
+
+```json
+[]
+```
+
+# Content start_mowing_selected_area
+
+```json
+[[-0.3, 0.112, 11]]
+```
+
+![zones_2.png](img/zones_2.png)
+
+[Summary](#summary)
+
+### Custom Zone Settings
+
+| Object Id                                        | Description                                                                                          |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| xxx.map.zones.01.custom.multi_angle.01           | Maximum of 3 angles possible                                                                         |
+| xxx.map.zones.01.custom.multi_angle.01.active    | Activate/deactivate angle                                                                            |
+| xxx.map.zones.01.custom.multi_angle.01.angle     | Change angle between 0°–180°                                                                         |
+| xxx.map.zones.01.custom.multi_angle.angle        | Enter new angle between 0°–180°                                                                      |
+| xxx.map.zones.01.custom.multi_angle.angle_active | Activate/deactivate new angle                                                                        |
+| xxx.map.zones.01.custom.multi_angle.angle_create | Create new angle                                                                                     |
+| xxx.map.zones.01.custom.multi_angle.delete_angle | Delete an angle                                                                                      |
+| xxx.map.zones.01.custom.currentCustomRaw         | Current JSON of custom settings from the cloud                                                       |
+| xxx.map.zones.01.custom.plan_mode                | Cutting direction                                                                                    |
+| xxx.map.zones.01.custom.region_id                | Zone ID                                                                                              |
+| xxx.map.zones.01.custom.setCustomRaw             | Instead of setting objects, a JSON can also be sent. Use and modify the JSON from `currentCustomRaw` | If angles are used, option 4 must be selected here |
+| xxx.map.zones.01.custom.setCustomZoneSettings    | Send `currentCustomRaw`                                                                              |
+| xxx.map.zones.01.custom.setting                  | Use default settings from `xxx.settings.multi_angle`                                                 |
+| xxx.map.zones.01.custom.start                    | Apply changes immediately or during the next mowing operation                                        |
+| xxx.map.zones.01.custom.work_gap                 | Cutting distance                                                                                     |
+| xxx.map.zones.01.custom.work_speed               | Mowing speed                                                                                         |
+
+# setCustomRaw
+
+```json
+{
+    "work_gap": 3,
+    "region_size": 54,
+    "blade_height": 40,
+    "estimate_time": 30,
+    "multi_zigzag_angles": [
+        {
+            "active": true,
+            "angle": 74
+        },
+        {
+            "active": true,
+            "angle": 68
+        },
+        {
+            "active": true,
+            "angle": 117
+        }
+    ],
+    "blade_speed": 2800,
+    "plan_mode": 0,
+    "region_id": 1789399960596,
+    "start": 0,
+    "finish": 1,
+    "work_speed": 1,
+    "setting": true
+}
+```
+
+![zones_custom.png](img/zones_custom.png)
+
+[Summary](#summary)
+
+### All data from the mower via the cloud and MQTT connection.
+
+`Hier werden nur einige Objekte beschrieben`
+
+| Object Id                            | Description                                           |
+| ------------------------------------ | ----------------------------------------------------- |
+| xxx.mower_raw.blade                  | Blade settings (MQTT)                                 |
+| xxx.mower_raw.charge_pos             | Charging station position (MQTT)                      |
+| xxx.mower_raw.consumable_items       | Consumables (MQTT)                                    |
+| xxx.mower_raw.file_17                | New path file uploaded (MQTT)                         |
+| xxx.mower_raw.file_7                 | New map file uploaded (MQTT)                          |
+| xxx.mower_raw.current_work_param     | Current work parameters (MQTT)                        |
+| xxx.mower_raw.mcu_ver                | Microcontroller unit (MQTT)                           |
+| xxx.mower_raw.mow_efficiency         | Mowing efficiency (MQTT)                              |
+| xxx.mower_raw.current_file           | Current path file (MQTT)                              |
+| xxx.mower_raw.path_info              | Current number of points in mowing history (MQTT+GPS) |
+| xxx.mower_raw.notice                 | Last message (MQTT)                                   |
+| xxx.mower_raw.rain                   | Rain setting (MQTT)                                   |
+| xxx.mower_raw.robot_pos              | Mower position (MQTT)                                 |
+| xxx.mower_raw.rtk_pos                | Real-time kinematic positioning (MQTT)                |
+| xxx.mower_raw.schedule_info          | Last modified time slot (MQTT)                        |
+| xxx.mower_raw.support_custom_pattern | All possible patterns (MQTT)                          |
+| xxx.mower_raw.appUserId              | User ID                                               |
+| xxx.mower_raw.auto_upgrade           | Automatic firmware update on/off                      |
+| xxx.mower_raw.backup_map_amount      | Number of backup maps                                 |
+| xxx.mower_raw.base_sn                | Charging station serial number                        |
+| xxx.mower_raw.bindAntiTheftId        | ID of the 4G or GPS module                            |
+| xxx.mower_raw.bladeHeight            | Blade height                                          |
+| xxx.mower_raw.bladeSpeed ​​          | Blade speed                                           |
+| xxx.mower_raw.camera_sn              | Camera serial number                                  |
+| xxx.mower_raw.camera_temp            | Camera temperature                                    |
+| xxx.mower_raw.code                   | Cloud response: 0 = All OK, >0 = Error                |
+| xxx.mower_raw.dev_model              | Mower model                                           |
+| xxx.mower_raw.dev_name               | Mower name                                            |
+| xxx.mower_raw.deviceId               | Mower ID                                              |
+| xxx.mower_raw.deviceSn               | Mower serial number                                   |
+| xxx.mower_raw.elec                   | Battery level                                         |
+| xxx.mower_raw.event_code             | Last event                                            |
+| xxx.mower_raw.id                     | ID for MQTT message mapping                           |
+| xxx.mower_raw.iobroker_sid           | Created by the adapter; required for the live map     |
+| xxx.mower_raw.key                    | Key for MQTT message mapping                          |
+| xxx.mower_raw.net_4g_sig             | 4G signal strength                                    |
+| xxx.mower_raw.path                   | Current path -> required for the live map             |
+| xxx.mower_raw.sid                    | App SID for the live map                              |
+| xxx.mower_raw.soc_temp               | Battery temperature                                   |
+
+![mower_raw_1.png](img/mower_raw_1.png)
+![mower_raw_2.png](img/mower_raw_2.png)
+![mower_raw_3.png](img/mower_raw_3.png)
+![mower_raw_4.png](img/mower_raw_4.png)
+![mower_raw_5.png](img/mower_raw_5.png)
+![mower_raw_6.png](img/mower_raw_6.png)
+![mower_raw_7.png](img/mower_raw_7.png)
+![mower_raw_8.png](img/mower_raw_8.png)
+![mower_raw_9.png](img/mower_raw_9.png)
+![mower_raw_10.png](img/mower_raw_10.png)
+![mower_raw_11.png](img/mower_raw_11.png)
+
+[Summary](#summary)
+
+### Logs
+
+| Object Id                            | Description                |
+| ------------------------------------ | -------------------------- |
+| xxx.notice.commonMesgage             | General notifications      |
+| xxx.notice.communityActivityMessage  | Recommended events         |
+| xxx.notice.deadLineWarnMessageBlade  | Replace blade              |
+| xxx.notice.deadLineWarnMessageCutter | Clean small mower deck     |
+| xxx.notice.deadLineWarnTrimmerRope   | Replace trimmer line       |
+| xxx.notice.deviceExceptionMessage    | Operational irregularities |
+| xxx.notice.taskStatus                | Task status                |
+| xxx.notice.trackWarningMessage       | Tracking                   |
+| xxx.notice.update                    | Reload settings            |
+
+![notice.png](img/notice.png)
+
+[Summary](#summary)
+
+### Remote Control
+
+| Object Id                      | Description                                       |
+| ------------------------------ | ------------------------------------------------- |
+| xxx.remote.dock                | Return to charging station                        |
+| xxx.remote.pause               | Pause                                             |
+| xxx.remote.refresh             | Refresh status                                    |
+| xxx.remote.refresh_property    | Refresh properties                                |
+| xxx.remote.set_border_distance | Edge cutting distance (Model V1)                  |
+| xxx.remote.set_border_first    | Cut edge first (Model V1)                         |
+| xxx.remote.set_return_path     | Docking mode (Model V1)                           |
+| xxx.remote.set_screen_duration | Automatic screen timeout (Model V1)               |
+| xxx.remote.start               | Start mowing                                      |
+| xxx.remote.startZones          | Mow zones [Zone-Id1, Zone-Id2]                    |
+| xxx.remote.stop                | Stop                                              |
+| xxx.remote.stop_find_charger   | Cancel 'Return to charging station'               |
+| xxx.remote.border              | Edge cutting (V models: mode 5 with `value:true`) |
+
+![remote.png](img/remote.png)
+
+[Summary](#summary)
+
+### Schedule
+
+| Object Id                                  | Description                                              |
+| ------------------------------------------ | -------------------------------------------------------- |
+| xxx.schedule.getSchedule                   | Reload schedule from the cloud                           |
+| xxx.schedule.pauseSchedule                 | Pause schedule                                           |
+| xxx.schedule.schedule_mode                 | Activate/deactivate schedule; custom or recommended mode |
+| xxx.schedule.schedule_time_work_repeat     | Mow for the entire scheduled work time                   |
+| xxx.schedule.schedule_time_zone            | Time zone                                                |
+| xxx.schedule.setSchedule                   | Send all changes to the cloud                            |
+| xxx.schedule.zones_available               | Available zones for e.g. `0_sunday_1.zones`              |
+| xxx.schedule.0_sunday_1.active             | Always keep set to true                                  |
+| xxx.schedule.0_sunday_1.end                | End time in hh:mm format                                 |
+| xxx.schedule.0_sunday_1.need_follow_border | Unknown                                                  |
+| xxx.schedule.0_sunday_1.start              | Start time in hh:mm format                               |
+| xxx.schedule.0_sunday_1.unlock             | Always keep set to true                                  |
+| xxx.schedule.0_sunday_1.work_order         | Custom sequence. A zone must be entered. 0=On/Off        |
+| xxx.schedule.0_sunday_1.zones              | Zone(s) to be mowed; if empty, all zones are mowed.      |
+
+![schedule_1.png](img/schedule_1.png)
+![schedule_2.png](img/schedule_2.png)
+
+[Summary](#summary)
+
+### Settings
+
+| State                          | Description                                                                                                    | Range                                                           | Unit | Notes          |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---- | -------------- |
+| `bladeSpeed`                   | Blade speed                                                                                                    | 2800 – 3000 (step 100)                                          | rpm  | New API only   |
+| `bladeHeight`                  | Blade height                                                                                                   | 20 – 100 (step 5)                                               | mm   | New API only   |
+| `rainFlag`                     | Enable/disable rain delay                                                                                      | boolean                                                         | —    | Old + New API  |
+| `rainDelayDuration`            | Rain delay duration (min)                                                                                      | 0 – 720 (step 1)                                                | min  | Old + New API  |
+| `night_work`                   | Enable/disable night work                                                                                      | boolean                                                         | —    | New API only   |
+| `recharge_mode`                | Docking path                                                                                                   | 0 = direct path<br>1 = smart<br>2 = along edge                  | —    | New API only   |
+| `work_touch_mode`              | Obstacle avoidance strategy                                                                                    | 0 = no touch<br>1 = slow touch                                  | —    | New API only   |
+| `auto_ride_edge_map_m`         | Auto edge-following mapping                                                                                    | 0 = not enabled<br>1 = enabled                                  | —    | New API only   |
+| `dis_along_border`             | Edge distance                                                                                                  | 0 = close<br>1 = far                                            | —    | New API only   |
+| `first_along_border`           | Mowing preference                                                                                              | boolean                                                         | —    | New API only   |
+| `follow_border_freq`           | Edge cutting frequency                                                                                         | 1 = every time<br>2 = every second time<br>3 = every third time | —    | New API only   |
+| `plan_mode`                    | Cutting direction. For angle must be set 4                                                                     | 0 = default<br>1 = traceless<br>4 = multi-angle                 | —    | New API only   |
+| `gap`                          | Cutting spacing                                                                                                | 1 = narrow<br>2 = standard<br>3 = wide                          | —    | New API only   |
+| `workSpeed`                    | Mowing speed                                                                                                   | 1 = slow<br>2 = standard<br>3 = fast                            | —    | New API only   |
+| `ai_sensitivity`               | AI sensitivity                                                                                                 | 0 = low<br>1 = high                                             | —    | New API only   |
+| `dev_name`                     | Change device name                                                                                             | string                                                          | —    | New API only   |
+| `energy_saving_mode`           | Energy-saving mode                                                                                             | boolean                                                         | —    | New API only   |
+| `pin_old`                      | Enter old PIN                                                                                                  | number                                                          | —    | New API only   |
+| `pin_new`                      | To change the PIN, enter the new PIN here and<br> the old PIN under `pin_old`                                  | number                                                          | —    | New API only   |
+| `custom_flag`                  | Unknown                                                                                                        | boolean                                                         | —    | New API only   |
+| `auto_upgrade`                 | Enable/disable automatic firmware update                                                                       | boolean                                                         | —    | New API only   |
+| `reset_bladeplate`             | Reset blade plate counter                                                                                      | boolean                                                         | —    | New API only   |
+| `reset_blade`                  | Reset blade counter                                                                                            | boolean                                                         | —    | New API only   |
+| `reset_smal_bladeplate`        | Reset small blade plate counter                                                                                | boolean                                                         | —    | New API only X |
+| `reset_smal_blade`             | Reset small blade counter                                                                                      | boolean                                                         | —    | New API only X |
+| `firmware_available`           | Currently available firmware                                                                                   | string                                                          | —    | New API only   |
+| `firmware_description`         | Description of current firmware                                                                                | string                                                          | —    | New API only   |
+| `firmware_update_available`    | Is an update available? true=yes, false=no                                                                     | boolean                                                         | —    | New API only   |
+| `firmware_update_check_manual` | Checks are performed every 24h after adapter startup.<br>Use this to manually check if an update is available. | boolean                                                         | —    | New API only   |
+| `firmware_update_start`        | Start firmware update                                                                                          | boolean                                                         | —    | New API only   |
+
+![settings_1.png](img/settings_1.png)
+![settings_2.png](img/settings_2.png)
+
+[Summary](#summary)
+
+### Settings Multi-Angle
+
+| Object Id                             | Description                     |
+| ------------------------------------- | ------------------------------- |
+| xxx.settings.multi_angle.01           | Only 3 angles can be created    |
+| xxx.settings.multi_angle.01.active    | Activate/deactivate angle       |
+| xxx.settings.multi_angle.01.angle     | Change angle between 0°–180°    |
+| xxx.settings.multi_angle.angle        | Enter new angle between 0°–180° |
+| xxx.settings.multi_angle.angle_active | Activate/deactivate new angle   |
+| xxx.settings.multi_angle.angle_create | Create new angle                |
+| xxx.settings.multi_angle.delete_angle | Delete an angle                 |
+
+![settings_multi.png](img/settings_multi.png)
+
+[Summary](#summary)
+
+### Skins
+
+| Object Id | Description |
+| --------- | ----------- |
+
+<!--
+![skins.png](img/skins.png)
+-->
+
+[Summary](#summary)
+
+### Communities
+
+| Object Id | Description |
+| --------- | ----------- |
+
+<!--
+![communities.png](img/communities.png)
+-->
+
+[Summary](#summary)
+
+### Credit cards
+
+| Object Id | Description |
+| --------- | ----------- |
+
+<!--
+![card.png](img/card.png)
+-->
+
+[Summary](#summary)
+
+### Authorization
+
+| Object Id               | Description                                                         |
+| ----------------------- | ------------------------------------------------------------------- |
+| auth.app_id             | Created by the adapter and required for some requests to the cloud. |
+| auth.mqtt_connected     | MQTT connection status for S/X/V models                             |
+| auth.mqtt_connected_V1  | MQTT connection status for V1 model                                 |
+| auth.mqtt_connected_old | MQTT connection status for wired mowers                             |
+| auth.mqtt_connection    | Access credentials for the MQTT connection                          |
+| auth.session            | Access credentials for the cloud connection                         |
+
+![auth.png](img/auth.png)
+
+[Summary](#summary)
+
+### Request limt
+
+| Object Id         | Description                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| rateLimit.request | Here you can view the requests sent to the cloud. A safeguard against faulty scripts. |
+| rateLimit.restart | Here, the adapter's restarts per day are counted. A safeguard against faulty scripts. |
+
+![ratelimit.png](img/ratelimit.png)
+
+### JSON Request
+
+```json
+{
+    "requestCount": 291,
+    "requestLast": 1791627513938,
+    "requestTime": "2026-10-10T10:18:33.938Z",
+    "requestBlock": false,
+    "day": "41-6",
+    "request": [
+        {
+            "count": 291,
+            "method": "GET",
+            "urlPath": "/wireless_map/wireless_device/get?deviceSn=123",
+            "timestamp": 1791657143977,
+            "time": "2026-10-10T18:32:23.977Z"
+        },
+        {
+            "count": 290,
+            "method": "POST",
+            "urlPath": "/ota/firmware-large/wireless/check",
+            "data": "{\"deviceSn\":\"123\",\"deviceSpecies\":0,\"deviceType\":0,\"version\":\"1.1.28.3105\"}",
+            "timestamp": 1791657088209,
+            "time": "2026-10-10T18:31:28.209Z"
+        }
+    ]
+}
+```
+
+### JSON Restart
+
+```json
+{
+    "restartCount": 9,
+    "restartLast": 1791627513938,
+    "restartTime": "2026-10-10T10:18:33.938Z",
+    "day": "41-6"
+}
+```
+
+[Summary](#summary)

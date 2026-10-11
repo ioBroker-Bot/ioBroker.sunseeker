@@ -64,6 +64,7 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     async onReady() {
+        //ToDo getSchedule device S or X use getTimes
         //ToDo Multiple MQTT connections (V! + new + old)
         //ToDo Forced internet disconnection - Add rate limit
         //ToDo Wrong start_reason & end_reason
@@ -197,6 +198,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("error", err => this.log.error(`mqtt error: ${err.message || String(err)}`));
         this.sunseeker.on("own", payload => this.onSunseekerOwn(payload));
         this.sunseeker.on("mqtt_auth", payload => this.onSunseekerMqttAuth(payload));
+        this.sunseeker.on("mqtt_status", (objectId, val) => this.onSunseekerMqttStatus(objectId, val));
         this.sunseeker.on("session", payload => this.onSunseekerSession(payload));
         this.sunseeker.on("mode", payload => this.onSunseekerScheduleMode(payload));
         this.sunseeker.on("fence", payload => this.onSunseekerFenceSettings(payload));
@@ -369,6 +371,10 @@ class SunseekerAdapter extends utils.Adapter {
      */
     async onUnload(callback) {
         try {
+            await this.setState("info.connection", false, true);
+            await this.setState("auth.mqtt_connected", false, true);
+            await this.setState("auth.mqtt_connected_V1", false, true);
+            await this.setState("auth.mqtt_connected_old", false, true);
             if (this.sunseeker) {
                 this.sunseeker.stop();
                 this.sunseeker = null;
@@ -381,7 +387,6 @@ class SunseekerAdapter extends utils.Adapter {
                     this.clearTimeout(this.patternTimeout[sn]);
                 }
             }
-            this.setState("info.connection", false, true);
             callback();
         } catch (error) {
             this.log.error(`Error during unloading: ${error.message}`);
@@ -553,6 +558,10 @@ class SunseekerAdapter extends utils.Adapter {
             roles: {
                 fenceCenterLon: "value.gps.latitude",
                 fenceCenterLat: "value.gps.latitude",
+                batteryVoltage: "value.battery",
+            },
+            units: {
+                batteryVoltage: "V",
             },
         });
     }
@@ -1172,7 +1181,7 @@ class SunseekerAdapter extends utils.Adapter {
         if (count_custom != count_sort) {
             //Why is there a difference?
             this.log.debug(`ZigZag diff: ${count_custom} - ${count_sort}`);
-            await this.sunseeker.sleep(3000);
+            await this.delay(3000);
         }
         if (count_custom > 0) {
             this.setState(`${this.namespace}.${sn}.map.zones.setAllCustomRaw`, {
@@ -1988,6 +1997,14 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     /**
+     * @param {string} objectId
+     * @param {boolean} [val]
+     */
+    async onSunseekerMqttStatus(objectId, val) {
+        await this.setState(`auth.${objectId}`, { val: val, ack: true });
+    }
+
+    /**
      * @param {any} payload
      */
     async onSunseekerSession(payload) {
@@ -2007,6 +2024,8 @@ class SunseekerAdapter extends utils.Adapter {
             path = `${sn}.map.placed_blank.placed_blank_map`;
         } else if (region === "region_obstacle") {
             path = `${sn}.map.obstacles.obstacle_map`;
+        } else if (region === "region_customize") {
+            path = `${sn}.map.pattern.pattern_map`;
         }
         this.setState(path, dataUrl, true);
     }
@@ -2653,8 +2672,8 @@ class SunseekerAdapter extends utils.Adapter {
                         this.sunseeker.addDeleteObject(
                             sn,
                             map_info.region_placed_blank,
-                            "placed",
-                            "placed",
+                            "placed_blank",
+                            "placed_blank",
                             lang_pl,
                             name_pl,
                             this.createObjectDone,
@@ -3094,6 +3113,32 @@ class SunseekerAdapter extends utils.Adapter {
                     }).catch(error => {
                         this.log.error(`pattern delete: ${error.name}: ${error.message}`);
                     });
+                    await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.pattern.pattern_map`, {
+                        type: "state",
+                        common: {
+                            name: {
+                                en: "Map",
+                                de: "Karte",
+                                ru: "Карта",
+                                pt: "Mapa",
+                                nl: "Kaart",
+                                fr: "Carte",
+                                it: "Mappa",
+                                es: "Mapa",
+                                pl: "Mapa",
+                                uk: "Карта",
+                                "zh-cn": "地图",
+                            },
+                            type: "string",
+                            role: "text",
+                            write: false,
+                            read: true,
+                            def: "",
+                        },
+                        native: {},
+                    }).catch(error => {
+                        this.log.error(`Pattern Map: ${error.name}: ${error.message}`);
+                    });
                     await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.pattern.delete_automatic`, {
                         type: "state",
                         common: {
@@ -3146,6 +3191,32 @@ class SunseekerAdapter extends utils.Adapter {
                                 pl: "Utwórz wzór (punkty wartości z regionu)",
                                 uk: "Створити візерунок (оцінка балів з регіону)",
                                 "zh-cn": "创建模式（来自区域的值点）",
+                            },
+                            type: "boolean",
+                            role: "button",
+                            write: true,
+                            read: false,
+                            def: false,
+                        },
+                        native: {},
+                    }).catch(error => {
+                        this.log.error(`pattern create: ${error.name}: ${error.message}`);
+                    });
+                    await this.setObjectNotExistsAsync(`${this.namespace}.${sn}.map.pattern.points_pattern`, {
+                        type: "state",
+                        common: {
+                            name: {
+                                en: "Pattern points (value points from region)",
+                                de: "Musterpunkte (Wertpunkte aus Region)",
+                                ru: "Точки узора (значения точек из региона)",
+                                pt: "Pontos padrão (valores da região)",
+                                nl: "Patroonpunten (waardepunten uit de regio)",
+                                fr: "Points de référence (valeur par région)",
+                                it: "Punti modello (valore per regione)",
+                                es: "Puntos patrón (puntos de valor de la región)",
+                                pl: "Punkty wzoru (punkty wartości z regionu)",
+                                uk: "Точки шаблону (значення балів з регіону)",
+                                "zh-cn": "模式点（来自区域的价值点）",
                             },
                             type: "string",
                             role: "json",
@@ -3365,6 +3436,10 @@ class SunseekerAdapter extends utils.Adapter {
         const patternIdx = parts.indexOf("pattern");
         if (patternIdx > 0 && parts[patternIdx + 1]) {
             const patternSn = parts[patternIdx - 2];
+            if (parts[patternIdx + 1] === "points_pattern" && typeof state.val === "string") {
+                this.createPreviewMap(id, "region_customize", state.val, patternSn);
+                return;
+            }
             this.patternHandler(id, patternSn, state);
             return;
         }
@@ -3966,6 +4041,9 @@ class SunseekerAdapter extends utils.Adapter {
             case "region_obstacle":
                 areas[region].push(point);
                 break;
+            case "region_customize":
+                areas[region].push(point);
+                break;
             case "region_forbidden":
                 type_val = await this.getStateAsync(`${sn}.map.forbidden.forbidden_type`);
                 type_val = await this.getStateAsync(`${sn}.map.forbidden.forbidden_type`);
@@ -4220,6 +4298,7 @@ class SunseekerAdapter extends utils.Adapter {
         const command = parts.pop();
         let all = [];
         let img = null;
+        let points = undefined;
         switch (command) {
             case "create_pattern":
                 if (customize.length > 0) {
@@ -4235,12 +4314,14 @@ class SunseekerAdapter extends utils.Adapter {
                     }
                 }
                 img = await this.getStateAsync(`${sn}.map.pattern.selecte_pattern`);
+                points = await this.getStateAsync(`${sn}.map.pattern.points_pattern`);
                 if (
                     img &&
                     typeof img.val === "string" &&
                     meta.pattern[img.val] != null &&
-                    typeof state.val === "string" &&
-                    state.val.startsWith("[")
+                    points &&
+                    typeof points.val === "string" &&
+                    points.val.startsWith("[")
                 ) {
                     try {
                         const actTime = new Date().getTime();
@@ -4248,7 +4329,7 @@ class SunseekerAdapter extends utils.Adapter {
                             img_value: img.val,
                             last_edit_time: actTime,
                             min_width: 2.4,
-                            vertexs: JSON.parse(state.val),
+                            vertexs: JSON.parse(points.val),
                             img_id: actTime - 58535,
                         };
                         all.push(newPattern);

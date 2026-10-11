@@ -23,15 +23,20 @@ declare class Sunseeker extends EventEmitter {
     session: any;
     devicesRaw: Record<string, any>;
     deviceMeta: Record<string, any>;
+    mqttClientV1: any;
     mqttClient: any;
     mqttOldClient: any;
     mqttPassword: string | undefined;
     appId: string | undefined;
     mqttsPasswordFlag: boolean;
+    mqttsPasswordFlagV1: boolean;
     mqttWirefreeDomain: string | undefined;
     eventCodes: Record<string, string>;
     v1EventCodes: Record<string, string>;
     unloading: boolean;
+    unloadingV1: boolean;
+    statusMqtt: boolean;
+    statusMqttV1: boolean;
     requestLimit: Record<string, string>;
     maxRequest: number;
     errorlimit: number;
@@ -63,7 +68,7 @@ declare class Sunseeker extends EventEmitter {
     // devices.js
     loadEventCodes(language: string): void;
     classifyModel(modelName: string): "S" | "X" | "V" | "V1";
-    mqttBroker(): { host: string; port: number };
+    mqttBroker(device: boolean): { host: string; port: number } | null;
     getDevices(): Promise<any[]>;
     getEvents(sn: string, current: number, size: number): Promise<void>;
     setScheduleInfo(sn: string, data: any): void;
@@ -92,7 +97,6 @@ declare class Sunseeker extends EventEmitter {
     ota_base_upgrade(sn: string): Promise<void>;
     startUpdateCheck(first: boolean): Promise<void>;
     startUpdateCheckInterval(): Promise<void>;
-    sleep(ms: number): Promise<void>;
     setPlanMode(sn: string, mode: number, angle: any): Promise<void>;
     setDeviceName(sn: string, val: ioBroker.State | null | undefined): Promise<void>;
     setAutoUpgrade(sn: string, val: ioBroker.State | null | undefined): Promise<void>;
@@ -106,9 +110,13 @@ declare class Sunseeker extends EventEmitter {
     updateTheft(sn: string): Promise<void>;
     setAntiTheftX(data: any): Promise<boolean>;
 
+    // mqttV1.js
+    connectMqttV1(): void;
+    scheduleMqttRetryV1(): void;
+
     // mqtt.js
     initMqtt(): void;
-    startMqttNew(): Promise<void>;
+    startMqttNew(device: boolean): Promise<void>;
     connectMqtt(): void;
     scheduleMqttRetry(): void;
     startMqttOld(): void;

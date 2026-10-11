@@ -56,15 +56,8 @@
             "uk": "Адаптер косарки Sunseeker",
             "zh-cn": "Sunseeker 割草机适配器"
         },
-        "authors": [
-            "TA2k <tombox2020@gmail.com>",
-            "iobroker-community-adapters <iobroker-community-adapters@gmx.de>"
-        ],
-        "keywords": [
-            "sunseeker",
-            "adano",
-            "brücke"
-        ],
+        "authors": ["TA2k <tombox2020@gmail.com>", "iobroker-community-adapters <iobroker-community-adapters@gmx.de>"],
+        "keywords": ["sunseeker", "adano", "brücke"],
         "licenseInformation": {
             "type": "free",
             "license": "MIT"
@@ -121,12 +114,8 @@
             "request": []
         }
     },
-    "encryptedNative": [
-        "password"
-    ],
-    "protectedNative": [
-        "password"
-    ],
+    "encryptedNative": ["password"],
+    "protectedNative": ["password"],
     "objects": [],
     "instanceObjects": [
         {
@@ -187,6 +176,81 @@
                     "pl": "Urządzenie lub usługa połączona",
                     "uk": "Пристрої або послуги підключені",
                     "zh-cn": "证人或有关服务"
+                },
+                "type": "boolean",
+                "read": true,
+                "write": false,
+                "def": false
+            },
+            "native": {}
+        },
+        {
+            "_id": "auth.mqtt_connected",
+            "type": "state",
+            "common": {
+                "role": "indicator.reachable",
+                "name": {
+                    "en": "Mqtt Connection",
+                    "de": "MQTT-Verbindung",
+                    "ru": "Маттовое соединение",
+                    "pt": "Conexão Matt",
+                    "nl": "Mqtt-verbinding",
+                    "fr": "Matt Connection",
+                    "it": "Connessione Mqtt",
+                    "es": "Conexión Mqtt",
+                    "pl": "Połączenie Mqtt",
+                    "uk": "Підключення Mqtt",
+                    "zh-cn": "Mqtt 连接"
+                },
+                "type": "boolean",
+                "read": true,
+                "write": false,
+                "def": false
+            },
+            "native": {}
+        },
+        {
+            "_id": "auth.mqtt_connected_V1",
+            "type": "state",
+            "common": {
+                "role": "indicator.reachable",
+                "name": {
+                    "en": "Mqtt V1 Connection",
+                    "de": "Mqtt V1 Verbindung",
+                    "ru": "Подключение к Мэтту V1",
+                    "pt": "Conexão Matt V1",
+                    "nl": "Matt V1-verbinding",
+                    "fr": "Connexion Matt V1",
+                    "it": "Connessione Matt V1",
+                    "es": "Conexión Mqtt V1",
+                    "pl": "Połączenie Mqtt V1",
+                    "uk": "Підключення Mqtt V1",
+                    "zh-cn": "Mqtt V1 连接"
+                },
+                "type": "boolean",
+                "read": true,
+                "write": false,
+                "def": false
+            },
+            "native": {}
+        },
+        {
+            "_id": "auth.mqtt_connected_old",
+            "type": "state",
+            "common": {
+                "role": "indicator.reachable",
+                "name": {
+                    "en": "Mqtt Connection (wire device)",
+                    "de": "MQTT Connection (Kabelgerät)",
+                    "ru": "Подключение Matt (проводное устройство)",
+                    "pt": "Conexão Matt (cabo)",
+                    "nl": "Matt-verbinding (kabelapparaat)",
+                    "fr": "Matt Connection (appareil filaire)",
+                    "it": "Connessione Mqtt (cavo)",
+                    "es": "Conexión Mqtt (cable)",
+                    "pl": "Połączenie Mqtt (urządzenie przewodowe)",
+                    "uk": "Підключення Mqtt (дротовий пристрій)",
+                    "zh-cn": "Mqtt 连接（有线设备）"
                 },
                 "type": "boolean",
                 "read": true,
