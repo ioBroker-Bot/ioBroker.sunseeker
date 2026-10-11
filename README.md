@@ -104,7 +104,7 @@ The Sunseeker API exposes far more fields than the adapter currently writes. All
 
 ## Questions
 
-🇩🇪 [Fragen](https://forum.iobroker.net/topic/84650/test-adapter-sunseeker?_=1781193847690)
+🇩🇪 [Fragen](https://forum.iobroker.net/topic/85407/test-adapter-sunseeker-v0.0.2)
 
 ## Changelog
 
