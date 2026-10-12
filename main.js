@@ -1675,6 +1675,12 @@ class SunseekerAdapter extends utils.Adapter {
             this.setMowerRawPos(sn, data);
             return;
         }
+        if (id == "device_invite" || id === "community_activity_message") {
+            if (this.sunseeker) {
+                this.sunseeker.getEvents(sn, 1, 10);
+                return;
+            }
+        }
         if (id == "setCustomizeArea") {
             //ToDo If a pattern is created without a response, the pattern is not displayed but is still traced!!!
             if (this.patternTimeout[sn]) {
@@ -3374,7 +3380,7 @@ class SunseekerAdapter extends utils.Adapter {
         }
         if (!raw.online) {
             this.log.warn(`onStateChange: Device ${parts[2]} is offline`);
-            return;
+            //return;
         }
         const eventsIdx = parts.indexOf("events");
         if (eventsIdx > 0) {
