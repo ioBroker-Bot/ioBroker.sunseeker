@@ -23,9 +23,12 @@ declare class Sunseeker extends EventEmitter {
     session: any;
     devicesRaw: Record<string, any>;
     deviceMeta: Record<string, any>;
+    devicesId: Record<string, string>;
     mqttClientV1: any;
     mqttClient: any;
     mqttOldClient: any;
+    topUp: boolean;
+    topUpArrayDeviceSn: string[];
     mqttPassword: string | undefined;
     appId: string | undefined;
     mqttsPasswordFlag: boolean;
@@ -77,6 +80,7 @@ declare class Sunseeker extends EventEmitter {
     setLiveSettings(sn: string, value: ioBroker.State | null | undefined, attribut: string): void;
     changeAttributeName(data: any): void;
     getUpdateDevices(): Promise<void>;
+    getUpdateSharing(): Promise<void>;
     hexToRGBA(hex: string | boolean | number): void;
 
     // polling-and-settings.js
@@ -109,6 +113,12 @@ declare class Sunseeker extends EventEmitter {
     createFence(sn: string): Promise<void>;
     updateTheft(sn: string): Promise<void>;
     setAntiTheftX(data: any): Promise<boolean>;
+    setRemark(id: string, sn: string, data: any): Promise<boolean>;
+    deleteDevice(id: string, sn: string, deviceId: string, devSn: string, obj: any, noneId: string): Promise<boolean>;
+    sendShareRequest(id: string, objId: string, sn: string, mail: string): Promise<boolean>;
+    setUnbind(sn: string, data: any, objId: string): Promise<boolean>;
+    acceptShareApplyInvite(id: string, val: string, obj: any, sn: string, data: any): Promise<boolean>;
+    setTopUp(id: string, sn: string, snList: any[], type: number): Promise<boolean>;
 
     // mqttV1.js
     connectMqttV1(): void;
@@ -169,6 +179,9 @@ declare class Sunseeker extends EventEmitter {
     createCustomMultiAngle(sn: string, path: string): Promise<void>;
     setCustomMultiAngle(sn: string, data: any, path: string): Promise<void>;
     availableMessageSettings(message: string): Promise<any>;
+    addSharing(sn: string): Promise<any>;
+    updateShareApplyInvite(sn: string, states: any, extend: boolean | null): Promise<void>;
+    addTopUp(sn: string, isAvailable: any): Promise<void>;
 }
 
 export = Sunseeker;

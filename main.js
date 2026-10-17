@@ -181,6 +181,7 @@ class SunseekerAdapter extends utils.Adapter {
         }
 
         this.sunseeker.on("devices", payload => this.onSunseekerDevices(payload));
+        this.sunseeker.on("devicesList", payload => this.onSunseekerDevicesList(payload));
         this.sunseeker.on("updateDevices", payload => this.onSunseekerUpdateDevices(payload));
         this.sunseeker.on("records", payload => this.onSunseekerRecords(payload));
         this.sunseeker.on("status", payload => this.onSunseekerStatus(payload));
@@ -206,6 +207,8 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("position", payload => this.onSunseekerInfoPosition(payload));
         this.sunseeker.on("clearCache", payload => this.onSunseekerClearJson2iobCache(payload));
         this.sunseeker.on("previewmap", payload => this.onSunseekerPreviewMap(payload));
+        this.sunseeker.on("sharing", (sn, data) => this.onSunseekerSharingUser(sn, data));
+        this.sunseeker.on("mqttInvite", (sn, data) => this.onSunseekerInviteCheck(sn, data));
 
         this.subscribeStates("*");
 
@@ -635,6 +638,37 @@ class SunseekerAdapter extends utils.Adapter {
         }
     }
 
+    async onSunseekerDevicesList({ devices }) {
+        if (!Array.isArray(devices) || !this.sunseeker) {
+            return;
+        }
+        for (const d of devices) {
+            const sn = d.deviceSn.replace(this.FORBIDDEN_CHARS, "_");
+            const cleanup = this.removeNull(d);
+            if (cleanup.ownerAppUserId) {
+                const data = {
+                    ownerAppUserId: cleanup.ownerAppUserId,
+                };
+                await this.json2iob.parse(`${sn}.mower_raw`, data, {
+                    channelName: {
+                        en: "All data from cloud and mqtt",
+                        de: "Alle Daten aus der Cloud und MQTT",
+                        ru: "Все данные поступают из облака и MQTT.",
+                        pt: "Todos os dados da nuvem e do MQTT",
+                        nl: "Alle gegevens zijn afkomstig uit de cloud en via MQTT.",
+                        fr: "Toutes les données proviennent du cloud et de MQTT.",
+                        it: "Tutti i dati dal cloud e MQTT",
+                        es: "Todos los datos provienen de la nube y MQTT.",
+                        pl: "Wszystkie dane z chmury i MQTT",
+                        uk: "Всі дані з хмари та mqtt",
+                        "zh-cn": "所有数据均来自云端和 MQTT",
+                    },
+                    forceIndex: true,
+                });
+            }
+        }
+    }
+
     async onSunseekerDevices({ devices }) {
         if (!Array.isArray(devices)) {
             return;
@@ -722,6 +756,7 @@ class SunseekerAdapter extends utils.Adapter {
                             null,
                             null,
                         );
+                        await this.sunseeker.addSharing(sn);
                         common = {
                             name: {
                                 en: "Pattern",
@@ -1639,6 +1674,9 @@ class SunseekerAdapter extends utils.Adapter {
                     null,
                 );
             }
+            if (this.sunseeker) {
+                this.sunseeker.addTopUp(sn, this.createObjectDone);
+            }
             await this.ensureWritableSettings(sn, normalized);
             await this.setSettings(sn, cleanup);
         }
@@ -1674,12 +1712,6 @@ class SunseekerAdapter extends utils.Adapter {
         if (id == "device_pos") {
             this.setMowerRawPos(sn, data);
             return;
-        }
-        if (id == "device_invite" || id === "community_activity_message") {
-            if (this.sunseeker) {
-                this.sunseeker.getEvents(sn, 1, 10);
-                return;
-            }
         }
         if (id == "setCustomizeArea") {
             //ToDo If a pattern is created without a response, the pattern is not displayed but is still traced!!!
@@ -2018,6 +2050,146 @@ class SunseekerAdapter extends utils.Adapter {
         obj.access_token = this.encrypt(obj.access_token);
         obj.refresh_token = this.encrypt(obj.refresh_token);
         await this.setState(`auth.session`, { val: JSON.stringify(obj), ack: true });
+    }
+
+    /**
+     * @param {string} sn
+     * @param {any} data
+     */
+    async onSunseekerSharingUser(sn, data) {
+        if (typeof data === "object") {
+            const id = [];
+            for (const user in data) {
+                const cleanup = this.removeNull(data[user]);
+                if (cleanup && cleanup.deviceUser && cleanup.deviceUser.id) {
+                    id.push(cleanup.deviceUser.id);
+                    if (cleanup.user && cleanup.user.fbToken) {
+                        cleanup.user.fbToken = this.encrypt(cleanup.user.fbToken);
+                    }
+                    await this.json2iob.parse(`${sn}.sharing.share_user.${cleanup.deviceUser.id}`, cleanup, {
+                        channelName: cleanup.user.username,
+                        forceIndex: true,
+                        descriptions: {
+                            [`share_user.${cleanup.deviceUser.id}.deviceUser`]: cleanup.deviceUser.remark
+                                ? cleanup.deviceUser.remark
+                                : cleanup.deviceUser.deviceId,
+                            [`share_user.${cleanup.deviceUser.id}.user`]: cleanup.user.username,
+                        },
+                    });
+                    let path = `${sn}.sharing.share_user.${cleanup.deviceUser.id}.alias`;
+                    if (!this.createObjectDone[path] && this.sunseeker) {
+                        this.createObjectDone[path] = true;
+                        const common = {
+                            name: {
+                                en: "Alias ​​assign",
+                                de: "Alias zuweisen",
+                                ru: "Присвоить псевдоним",
+                                pt: "Atribuir alias",
+                                nl: "Alias toewijzen",
+                                fr: "Alias assigné",
+                                it: "Assegna alias",
+                                es: "Asignar alias",
+                                pl: "Przypisywanie aliasów",
+                                uk: "Призначення псевдонімів",
+                                "zh-cn": "别名分配",
+                            },
+                            type: "string",
+                            role: "state",
+                            read: true,
+                            write: true,
+                            def: "",
+                        };
+                        await this.sunseeker.createDataPoint(
+                            `${this.namespace}.${path}`,
+                            common,
+                            "state",
+                            null,
+                            null,
+                            null,
+                        );
+                    }
+                    if (!cleanup.deviceUser.ownerFlag) {
+                        path = `${sn}.sharing.share_user.${cleanup.deviceUser.id}.revoke`;
+                        if (!this.createObjectDone[path] && this.sunseeker) {
+                            this.createObjectDone[path] = true;
+                            const commons = {
+                                name: {
+                                    en: "Revoke authorization",
+                                    de: "Genehmigung widerrufen",
+                                    ru: "Отозвать разрешение",
+                                    pt: "Revogar autorização",
+                                    nl: "Autorisatie intrekken",
+                                    fr: "Révoquer l'autorisation",
+                                    it: "Revoca l'autorizzazione",
+                                    es: "Revocar autorización",
+                                    pl: "Odwołaj autoryzację",
+                                    uk: "Скасувати авторизацію",
+                                    "zh-cn": "撤销授权",
+                                },
+                                type: "boolean",
+                                role: "button",
+                                read: false,
+                                write: true,
+                                def: false,
+                            };
+                            await this.sunseeker.createDataPoint(
+                                `${this.namespace}.${path}`,
+                                commons,
+                                "state",
+                                null,
+                                null,
+                                null,
+                            );
+                        }
+                        path = `${sn}.sharing.share_user.${cleanup.deviceUser.id}.mark_revoke`;
+                        if (!this.createObjectDone[path] && this.sunseeker) {
+                            this.createObjectDone[path] = true;
+                            const commons = {
+                                name: {
+                                    en: "Mark for revocation",
+                                    de: "Zur Widerrufung markieren",
+                                    ru: "Отметить для аннулирования",
+                                    pt: "Marcar para revogação",
+                                    nl: "Markeren voor intrekking",
+                                    fr: "Marque pour révocation",
+                                    it: "Segnalazione per revoca",
+                                    es: "Marcar para revocación",
+                                    pl: "Znak do odwołania",
+                                    uk: "Позначити для скасування",
+                                    "zh-cn": "标记为撤销",
+                                },
+                                type: "boolean",
+                                role: "switch",
+                                read: true,
+                                write: true,
+                                def: false,
+                            };
+                            await this.sunseeker.createDataPoint(
+                                `${this.namespace}.${path}`,
+                                commons,
+                                "state",
+                                null,
+                                null,
+                                null,
+                            );
+                        }
+                    }
+                }
+            }
+            const all_channels = await this.getChannelsAsync();
+            const share_channels = all_channels.filter(
+                m => m._id.includes("sharing.share_user") && m._id.includes(sn) && m._id.split(".").length === 6,
+            );
+            for (const channel of share_channels) {
+                const _id = channel._id.split(".").pop();
+                if (!id.includes(_id)) {
+                    this.log.info(`Delete invite user ${channel._id}`);
+                    await this.delObjectAsync(channel._id, {
+                        recursive: true,
+                    });
+                }
+            }
+        }
     }
 
     async onSunseekerPreviewMap({ sn, dataUrl, region }) {
@@ -3378,9 +3550,14 @@ class SunseekerAdapter extends utils.Adapter {
             this.log.warn(`onStateChange: Device ${parts[2]} unknown`);
             return;
         }
+        const mapIdx = parts.indexOf("map");
         if (!raw.online) {
-            this.log.warn(`onStateChange: Device ${parts[2]} is offline`);
-            //return;
+            if (mapIdx > 0) {
+                this.log.warn(`onStateChange: Device ${parts[2]} is offline`);
+                return;
+            } else {
+                this.log.info(`onStateChange: Device ${parts[2]} is offline`);
+            }
         }
         const eventsIdx = parts.indexOf("events");
         if (eventsIdx > 0) {
@@ -3437,6 +3614,34 @@ class SunseekerAdapter extends utils.Adapter {
         if (setIdx > 0 && parts[setIdx] === "map_settings") {
             this.sunseeker.setLiveSettings(parts[setIdx - 2], state, parts[setIdx + 1]);
             this.setState(id, { val: state.val, ack: true });
+            return;
+        }
+        const shareIdx = parts.indexOf("sharing");
+        if (shareIdx > 0 && parts[shareIdx + 1]) {
+            const shareSn = parts[shareIdx - 1];
+            if (parts[shareIdx + 1] === "share_email" && typeof state.val === "string") {
+                if (this.isValidSyntax(state.val)) {
+                    this.setState(id, { val: state.val, ack: true });
+                } else {
+                    this.log.warn(`Wrong Email - ${state.val}`);
+                }
+                return;
+            }
+            if (parts[shareIdx + 3] === "mark_revoke" && typeof state.val === "boolean") {
+                if (state.val) {
+                    this.setState(id, { val: state.val, ack: true });
+                }
+                return;
+            }
+            if (parts[shareIdx + 1] === "select_device" && typeof state.val === "string") {
+                if (state.val != "none") {
+                    this.setState(id, { val: state.val, ack: true });
+                } else {
+                    this.log.warn(`Wrong userId - ${state.val}`);
+                }
+                return;
+            }
+            this.shareCommand(id, shareSn, state);
             return;
         }
         const patternIdx = parts.indexOf("pattern");
@@ -3519,7 +3724,6 @@ class SunseekerAdapter extends utils.Adapter {
             this.deleteRegion(id, blankSn, "region_blank", "blank");
             return;
         }
-        const mapIdx = parts.indexOf("map");
         if (mapIdx > 0 && parts[mapIdx + 1]) {
             const snr = parts[mapIdx - 1];
             if (parts[mapIdx + 1] === "livemap_update" && state && typeof state.val === "boolean") {
@@ -3783,6 +3987,14 @@ class SunseekerAdapter extends utils.Adapter {
                 }
                 return;
             }
+            if (leaf === "topUp" && typeof state.val === "boolean") {
+                this.setTopUpAndCheck(id, sn, state.val);
+                return;
+            }
+            if (leaf === "topUp_array" && typeof state.val === "string" && state.val.startsWith("[")) {
+                this.setTopUpArrayAndCheck(id, sn, state.val);
+                return;
+            }
             if (leaf === "pin_old") {
                 if (typeof state.val === "string") {
                     const numberFormat = /^\d{4}$/;
@@ -3991,6 +4203,9 @@ class SunseekerAdapter extends utils.Adapter {
         const remoteIdx = parts.indexOf("remote");
         if (remoteIdx < 0 || remoteIdx + 1 >= parts.length) {
             return;
+        }
+        if (!raw.online) {
+            this.log.info(`onStateChange: Device ${parts[2]} is offline`);
         }
         const sn = parts[remoteIdx - 1];
         const command = parts[remoteIdx + 1];
@@ -5158,6 +5373,225 @@ class SunseekerAdapter extends utils.Adapter {
     /**
      * @param {string} sn
      * @param {any} data
+     */
+    async onSunseekerInviteCheck(sn, data) {
+        if (!this.sunseeker) {
+            return;
+        }
+        if (data && data.data && data.deviceSn && data.data.body) {
+            const states = {
+                none: "none",
+            };
+            states[data.deviceSn] = `${data.data.body}<time>${data.timestamp}`;
+            this.sunseeker.updateShareApplyInvite(sn, states, true);
+        } else {
+            this.log.warn(`Attributes are missing from the invitation - ${JSON.stringify(data)}`);
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {string} state
+     */
+    async setTopUpArrayAndCheck(id, sn, state) {
+        if (!this.sunseeker) {
+            return;
+        }
+        let all_sn = [];
+        try {
+            all_sn = JSON.parse(state);
+        } catch (e) {
+            this.log.error(`topUp array: ${state} - ${e}`);
+        }
+        if (all_sn.length == 0) {
+            this.log.error(`The device array is empty`);
+            return;
+        }
+        const raws = this.sunseeker.devicesRaw;
+        if (Object.keys(raws).length != all_sn.length) {
+            this.log.error(`The serial number does not match. ${Object.keys(raws).length} - ${all_sn.length}`);
+            return;
+        }
+        for (const single_sn of all_sn) {
+            try {
+                const sn = single_sn.replace(this.FORBIDDEN_CHARS, "_");
+            } catch (e) {
+                this.log.error(`Serial number ${sn} has an incorrect format.`);
+                return;
+            }
+            if (!raws[sn]) {
+                this.log.error(`Serial number ${sn} not found`);
+                return;
+            }
+        }
+        const status = await this.sunseeker.setTopUp(id, sn, all_sn, 2);
+        if (status) {
+            this.delay(2000);
+            this.sunseeker.getUpdateDevices();
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {boolean} state
+     */
+    async setTopUpAndCheck(id, sn, state) {
+        if (!this.sunseeker) {
+            return;
+        }
+        if (!state) {
+            this.log.info(`One can only activate.`);
+            return;
+        }
+        const metas = this.sunseeker.deviceMeta;
+        const raws = this.sunseeker.devicesRaw;
+        const snList = [];
+        snList.push(sn);
+        if (Object.keys(raws).length < 2) {
+            this.log.warn(`Only one device found.`);
+            return;
+        }
+        for (const raw of Object.values(raws)) {
+            const meta = metas[raw.deviceSn];
+            if (meta.topUp) {
+                if (raw.deviceSn == sn) {
+                    this.log.info(`Device ${sn} is already activated for the home page.`);
+                    return;
+                }
+            }
+            if (raw.deviceSn != sn) {
+                snList.push(raw.deviceSn);
+            }
+        }
+        const status = await this.sunseeker.setTopUp(id, sn, snList, 1);
+        if (status) {
+            this.delay(2000);
+            this.sunseeker.getUpdateDevices();
+        }
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {ioBroker.State} state
+     */
+    async shareCommand(id, sn, state) {
+        if (!this.sunseeker) {
+            return;
+        }
+        const parts = id.split(".");
+        const command = parts.pop();
+        const objId = parts.join(".");
+        if (command === "alias") {
+            const deviceId = await this.getStateAsync(`${objId}.deviceUser.deviceId`);
+            const ownerAppUserId = await this.getStateAsync(`${objId}.deviceUser.appUserId`);
+            if (deviceId && deviceId.val && ownerAppUserId && ownerAppUserId.val) {
+                const data = {
+                    deviceId: deviceId.val,
+                    remark: state.val,
+                    userId: ownerAppUserId.val,
+                };
+                const status = await this.sunseeker.setRemark(id, sn, data);
+                if (status) {
+                    this.updateDeviceAfterStateChange(sn);
+                }
+            } else {
+                this.log.warn(`Cannot found user data ${objId}.deviceUser.deviceId - ${objId}.deviceUser.appUserId`);
+            }
+        } else if (command === "select_device_delete") {
+            if (!this.sunseeker) {
+                return;
+            }
+            const deviceId = await this.getStateAsync(`${objId}.select_device`);
+            if (deviceId && deviceId.val && typeof deviceId.val === "string" && deviceId.val != "none") {
+                const raw = this.sunseeker.devicesId[deviceId.val];
+                if (!raw) {
+                    this.log.error(`Cannot found device ${deviceId.val}`);
+                    return;
+                }
+                if (!this.sunseeker.devicesRaw[raw]) {
+                    this.log.error(`Cannot found device ${deviceId.val}`);
+                    return;
+                }
+                const delObj = await this.getObjectAsync(`${objId}.select_device`);
+                if (!delObj) {
+                    this.log.error(`Cannot found object ${objId}.select_device`);
+                    return;
+                }
+                delete delObj.common.states[deviceId.val];
+                const new_obj = JSON.parse(JSON.stringify(delObj));
+                const status = await this.sunseeker.deleteDevice(
+                    id,
+                    sn,
+                    deviceId.val,
+                    raw,
+                    new_obj,
+                    `${objId}.select_device`,
+                );
+                if (status) {
+                    this.updateDeviceAfterStateChange(sn);
+                }
+            }
+        } else if (command === "share_send") {
+            const mail = await this.getStateAsync(`${objId}.share_email`);
+            if (mail && mail.val && typeof mail.val === "string" && this.isValidSyntax(mail.val)) {
+                const status = await this.sunseeker.sendShareRequest(id, objId, sn, mail.val);
+                if (status) {
+                    this.updateDeviceAfterStateChange(sn);
+                }
+            } else {
+                this.log.warn(`Cannot found user data ${objId}.share_email`);
+            }
+        } else if (command === "revoke") {
+            const mark = await this.getStateAsync(`${objId}.mark_revoke`);
+            const deviceId = await this.getStateAsync(`${objId}.deviceUser.deviceId`);
+            const ownerAppUserId = await this.getStateAsync(`${objId}.deviceUser.appUserId`);
+            if (deviceId && deviceId.val && typeof deviceId.val === "string" && ownerAppUserId && ownerAppUserId.val) {
+                const data = {
+                    deviceId: deviceId.val,
+                    userId: ownerAppUserId.val,
+                };
+                if (state && typeof state.val === "boolean" && state.val) {
+                    if (mark && typeof mark.val === "boolean" && mark.val) {
+                        const status = await this.sunseeker.setUnbind(sn, data, objId);
+                        if (status) {
+                            this.updateDeviceAfterStateChange(sn);
+                        }
+                    } else {
+                        this.log.warn(`Please confirm the deletion - ${state.val}`);
+                    }
+                }
+            } else {
+                this.log.warn(
+                    `Cannot found user data ${objId}.share_user.${state.val}.deviceUser.deviceId - ${objId}.share_user.${state.val}.deviceUser.appUserId`,
+                );
+            }
+        } else if (command === "share_apply_invite") {
+            if (state && state.val) {
+                const data = {
+                    deviceSn: state.val,
+                    accept: 1,
+                };
+                if (state && state.val && typeof state.val === "string") {
+                    const obj = await this.getObjectAsync(id);
+                    if (obj && obj.common && obj.common.states) {
+                        delete obj.common.states[state.val];
+                        const new_obj = JSON.parse(JSON.stringify(obj));
+                        const status = await this.sunseeker.acceptShareApplyInvite(id, state.val, new_obj, sn, data);
+                        if (status) {
+                            this.updateDeviceAfterStateChange(sn);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * @param {string} sn
+     * @param {any} data
      * @param {number} plan
      */
     async cleanUpCalendar(sn, data, plan) {
@@ -5697,7 +6131,7 @@ class SunseekerAdapter extends utils.Adapter {
                     this.log.error(`change_active_map_name: ${error.name}: ${error.message}`);
                 });
                 if (mapName != "") {
-                    this.sunseeker.setStates(sn, { map_temp_name: mapName }, this.createObjectDone);
+                    this.setSettings(sn, { map_temp_name: mapName });
                 } else {
                     this.sunseeker.getMapTempName(sn);
                 }
@@ -6069,6 +6503,14 @@ class SunseekerAdapter extends utils.Adapter {
 
     async setRestartCount() {
         await this.setState(`rateLimit.restart`, { val: JSON.stringify(this.restartLimit), ack: true });
+    }
+
+    /**
+     * @param {string} email
+     */
+    isValidSyntax(email) {
+        const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+        return email.length <= 254 && EMAIL_REGEX.test(email);
     }
 }
 

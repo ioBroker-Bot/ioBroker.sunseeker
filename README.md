@@ -112,6 +112,12 @@ The Sunseeker API exposes far more fields than the adapter currently writes. All
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
+
+### **WORK IN PROGRESS**
+
+- (Lucky-ESA) Added account sharing
+- (Lucky-ESA) Added device sorting
+
 ### 0.0.3 (2026-10-11)
 
 - (Lucky-ESA) Settings added
