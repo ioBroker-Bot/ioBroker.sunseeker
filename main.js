@@ -3555,8 +3555,6 @@ class SunseekerAdapter extends utils.Adapter {
             if (mapIdx > 0) {
                 this.log.warn(`onStateChange: Device ${parts[2]} is offline`);
                 return;
-            } else {
-                this.log.info(`onStateChange: Device ${parts[2]} is offline`);
             }
         }
         const eventsIdx = parts.indexOf("events");
@@ -5414,10 +5412,11 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         for (const single_sn of all_sn) {
+            let sn = "";
             try {
-                const sn = single_sn.replace(this.FORBIDDEN_CHARS, "_");
+                sn = single_sn.replace(this.FORBIDDEN_CHARS, "_");
             } catch (e) {
-                this.log.error(`Serial number ${sn} has an incorrect format.`);
+                this.log.error(`Serial number ${sn} has an incorrect format. - ${e}`);
                 return;
             }
             if (!raws[sn]) {
