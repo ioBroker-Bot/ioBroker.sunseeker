@@ -5530,7 +5530,7 @@ class SunseekerAdapter extends utils.Adapter {
                     `${objId}.select_device`,
                 );
                 if (status) {
-                    this.updateDeviceAfterStateChange(sn);
+                    this.restart();
                 }
             }
         } else if (command === "share_send") {
@@ -5580,7 +5580,7 @@ class SunseekerAdapter extends utils.Adapter {
                         const new_obj = JSON.parse(JSON.stringify(obj));
                         const status = await this.sunseeker.acceptShareApplyInvite(id, state.val, new_obj, sn, data);
                         if (status) {
-                            this.updateDeviceAfterStateChange(sn);
+                            this.restart();
                         }
                     }
                 }
