@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sunseeker",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "news": {
+      "0.0.4": {
+        "en": "Added account sharing\nAdded device sorting",
+        "de": "Accountsharing hinzugefügt\nGerätesortierung hinzugefügt",
+        "ru": "Добавлен общий доступ к аккаунту\nДобавлена сортировка устройств",
+        "pt": "Mais contas compartilhadas\nAdição de itens",
+        "nl": "Delen van accounts toegevoegd\nSortering van apparaten toegevoegd",
+        "fr": "Partage de compte ajouté\nTri des appareils ajouté",
+        "it": "Aggiunto account\nAggiunto ordine",
+        "es": "Añadió compartir cuentas\nAñadió el orden de dispositivos",
+        "pl": "Dodano udostępnianie konta\nDodano sortowanie urządzeń",
+        "uk": "Додано спільний доступ до облікового запису\nДодано сортування пристроїв",
+        "zh-cn": "添加了账号共享\n增加了设备排序功能"
+      },
       "0.0.3": {
         "en": "Settings added\nRefresh properties button added\nMulti-angle added\nCustom Multi-angle added\nMirroring of App version 1.7.0 regarding login, header, and MQTT password.\nPattern, anti-theft added",
         "de": "Neue Einstellungen\nNeues Eigenschaften-Menü\nMehrwinkel hinzugefügt\nCustom Multiangle hinzugefügt\nSpiegeln von App Version 1.7.0 mit Login, Header und MQTT-Passwort.\nMuster, Diebstahlschutz hinzugefügt",
