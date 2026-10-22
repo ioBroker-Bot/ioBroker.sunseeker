@@ -37,7 +37,6 @@ declare class Sunseeker extends EventEmitter {
     eventCodes: Record<string, string>;
     v1EventCodes: Record<string, string>;
     unloading: boolean;
-    unloadingV1: boolean;
     statusMqtt: boolean;
     statusMqttV1: boolean;
     requestLimit: Record<string, string>;
