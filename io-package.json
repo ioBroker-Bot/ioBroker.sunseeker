@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sunseeker",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "news": {
+      "0.0.5": {
+        "en": "MQTT reconnected fixed",
+        "de": "MQTT neu verbunden",
+        "ru": "MQTT снова подключен (исправлено)",
+        "pt": "MQTT reconectado fixo",
+        "nl": "MQTT heeft opnieuw verbinding gemaakt, opgelost",
+        "fr": "MQTT reconnecté fixe",
+        "it": "MQTT ricollegato fisso",
+        "es": "MQTT reconectado fijo",
+        "pl": "MQTT ponownie podłączony stały",
+        "uk": "Виправлено повторне підключення MQTT",
+        "zh-cn": "MQTT 重新连接已修复"
+      },
       "0.0.4": {
         "en": "Added account sharing\nAdded device sorting",
         "de": "Accountsharing hinzugefügt\nGerätesortierung hinzugefügt",
