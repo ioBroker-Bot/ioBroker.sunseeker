@@ -15,6 +15,10 @@
 
 Connects Sunseeker robotic lawn mowers (also rebranded as Adano, Brücke, etc.) to ioBroker through the official Sunseeker cloud. Both the legacy (`Old`) and current (`New`) Sunseeker APIs are supported, covering the S, X, V and V1 model classes.
 
+## No ioBroker / Home Assistant / framework dependency.
+
+🇬🇧 [Readme](/lib/sunseeker/README.md)
+
 ## Requirements
 
 - ioBroker js-controller `>= 6.0.11`

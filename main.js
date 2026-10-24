@@ -165,13 +165,18 @@ class SunseekerAdapter extends utils.Adapter {
             this.config.session["action"] = 0;
         }
 
-        this.sunseeker = new Sunseeker(cfg.username, cfg.password, this, {
-            region: cfg.region || "EU",
-            apptype: cfg.apptype || "New",
-            language: cfg.language || "de-DE",
-            interval: Number(cfg.interval) > 59 && Number(cfg.interval) < 1441 ? Number(cfg.interval) : 300,
-            refreshAfterMqttMs: 60 * 1000,
-        });
+        this.sunseeker = new Sunseeker(
+            cfg.username,
+            cfg.password,
+            {
+                region: cfg.region || "EU",
+                apptype: cfg.apptype || "New",
+                language: cfg.language || "de-DE",
+                interval: Number(cfg.interval) > 59 && Number(cfg.interval) < 1441 ? Number(cfg.interval) : 300,
+                refreshAfterMqttMs: 60 * 1000,
+            },
+            this,
+        );
 
         await this.createAuth();
 
@@ -196,7 +201,8 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("firmware", payload => this.onSunseekerFirmware(payload));
         this.sunseeker.on("mqttConnect", () => this.setState("info.connection", true, true));
         this.sunseeker.on("mqttDisconnect", () => this.setState("info.connection", false, true));
-        this.sunseeker.on("error", err => this.log.error(`mqtt error message: ${err.message || String(err)}`));
+        this.sunseeker.on("error", (text, err) => this.log.error(`${text}: ${err.message || String(err)}`));
+        this.sunseeker.on("warn", (text, err) => this.log.warn(`${text}: ${err.message || String(err)}`));
         this.sunseeker.on("own", payload => this.onSunseekerOwn(payload));
         this.sunseeker.on("mqtt_auth", payload => this.onSunseekerMqttAuth(payload));
         this.sunseeker.on("mqtt_status", (objectId, val) => this.onSunseekerMqttStatus(objectId, val));
@@ -209,6 +215,18 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("previewmap", payload => this.onSunseekerPreviewMap(payload));
         this.sunseeker.on("sharing", (sn, data) => this.onSunseekerSharingUser(sn, data));
         this.sunseeker.on("mqttInvite", (sn, data) => this.onSunseekerInviteCheck(sn, data));
+        //this.sunseeker.on("event", payload => this.onSunseekerEvent(payload));
+        //this.sunseeker.on("notify", payload => this.onSunseekerNotify(payload));
+        //this.sunseeker.on("countUnreadMessage", payload => this.onSunseekerCountUnread(payload));
+        //this.sunseeker.on("systemMessage", payload => this.onSunseekerSystemMessage(payload));
+        //this.sunseeker.on("skin", payload => this.onSunseekerSkin(payload));
+        //this.sunseeker.on("limit", payload => this.onSunseekerRequestLimit(payload));
+        //this.sunseeker.on("communities", payload => this.onSunseekerCommunities(payload));
+        //this.sunseeker.on("agreements", payload => this.onSunseekerAgreements(payload));
+        //this.sunseeker.on("settingsX", payload => this.onSunseekerSettingsX(payload));
+        //this.sunseeker.on("getTime", payload => this.onSunseekerGetTime(payload));
+        //this.sunseeker.on("appRelease", payload => this.onSunseekerAppRelease(payload));
+        //this.sunseeker.on("errorMessage", payload => this.onSunseekerErrorMessage(payload));
 
         this.subscribeStates("*");
 
@@ -639,10 +657,10 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     async onSunseekerDevicesList({ devices }) {
-        if (!Array.isArray(devices) || !this.sunseeker) {
+        if (!devices || !Array.isArray(devices.records) || !this.sunseeker) {
             return;
         }
-        for (const d of devices) {
+        for (const d of devices.records) {
             const sn = d.deviceSn.replace(this.FORBIDDEN_CHARS, "_");
             const cleanup = this.removeNull(d);
             if (cleanup.ownerAppUserId) {
@@ -4099,8 +4117,7 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "plan_mode") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
-                    this.sunseeker.setPlanMode(sn, state.val, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.sendCommandPromise(leaf, id, sn, state);
                 } else if (typeof state.val === "number" && state.val == 4) {
                     this.sendZigZag(id, sn, state.val, false);
                 }
@@ -4108,15 +4125,13 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "dev_name") {
                 if (typeof state.val === "string" && state.val != "") {
-                    this.sunseeker.setDeviceName(sn, state);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.sendCommandPromise(leaf, id, sn, state);
                 }
                 return;
             }
             if (leaf === "auto_upgrade") {
                 if (typeof state.val === "boolean") {
-                    this.sunseeker.setAutoUpgrade(sn, state);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.sendCommandPromise(leaf, id, sn, state);
                 }
                 return;
             }
@@ -4494,6 +4509,37 @@ class SunseekerAdapter extends utils.Adapter {
             } else {
                 this.log.warn(`Cannot found map_id/timestamp from ${sn}.map.${zone}.${parts[5]}.id`);
             }
+        }
+    }
+
+    /**
+     * @param {string} type
+     * @param {string} id
+     * @param {string} sn
+     * @param {ioBroker.State} state
+     */
+    async sendCommandPromise(type, id, sn, state) {
+        if (!this.sunseeker) {
+            return;
+        }
+        if (type == "plan_mode" && typeof state.val === "number") {
+            const status = await this.sunseeker.setPlanMode(sn, state.val, null);
+            if (status) {
+                await this.setState(id, { val: state.val, ack: true });
+            }
+            return;
+        } else if (type == "dev_name") {
+            const status = await this.sunseeker.setDeviceName(sn, state);
+            if (status) {
+                await this.setState(id, { val: "", ack: true });
+            }
+            return;
+        } else if (type == "auto_upgrade" && typeof state.val === "boolean") {
+            const status = await this.sunseeker.setAutoUpgrade(sn, state);
+            if (status) {
+                this.setState(id, { val: state.val, ack: true });
+            }
+            return;
         }
     }
 
@@ -5082,8 +5128,10 @@ class SunseekerAdapter extends utils.Adapter {
                     angle: angle.val >= 0 && angle.val <= 180 ? angle.val : 90,
                 };
                 zigzag.push(zz);
-                this.sunseeker.setPlanMode(sn, 4, zigzag);
-                this.setState(id, { val: false, ack: true });
+                const status = await this.sunseeker.setPlanMode(sn, 4, zigzag);
+                if (status) {
+                    await this.setState(id, { val: false, ack: true });
+                }
             }
         }
     }
@@ -5176,12 +5224,15 @@ class SunseekerAdapter extends utils.Adapter {
                     recursive: true,
                 });
             }
+            let status = false;
             if (!isActive || zigzag.length == 0) {
-                this.sunseeker.setPlanMode(sn, 0, null);
+                status = await this.sunseeker.setPlanMode(sn, 0, null);
             } else {
-                this.sunseeker.setPlanMode(sn, 4, zigzag);
+                status = await this.sunseeker.setPlanMode(sn, 4, zigzag);
             }
-            this.setState(id, { val: "00", ack: true });
+            if (status) {
+                await this.setState(id, { val: "00", ack: true });
+            }
         }
     }
 
@@ -5221,12 +5272,15 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         if (this.sunseeker) {
+            let status = false;
             if (!isActive) {
-                this.sunseeker.setPlanMode(sn, 0, null);
+                status = await this.sunseeker.setPlanMode(sn, 0, null);
             } else {
-                this.sunseeker.setPlanMode(sn, state, zigzag);
+                status = await this.sunseeker.setPlanMode(sn, state, zigzag);
             }
-            this.setState(id, { val: state, ack: true });
+            if (status) {
+                await this.setState(id, { val: state, ack: true });
+            }
         }
     }
 

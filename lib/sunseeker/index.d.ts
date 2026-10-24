@@ -10,15 +10,32 @@ interface SunseekerOptions {
     language: string;
     interval: number;
     refreshAfterMqttMs: number;
+    logger?: Logger;
+}
+
+interface Logger {
+    info: (m: string) => void;
+    warn: (m: string) => void;
+    error: (m: string) => void;
+    debug: (m: string) => void;
+}
+
+interface Timers {
+    setTimeout: (c: any, t: number) => void;
+    clearTimeout: (x: any) => void;
+    setInterval: (c: any, t: number) => void;
+    clearInterval: (x: any) => void;
+    delay: (ms: number) => Promise<void>;
 }
 
 declare class Sunseeker extends EventEmitter {
-    constructor(username: string, password: string, iob: ioBroker.Adapter, options?: SunseekerOptions);
+    constructor(username: string, password: string, options?: SunseekerOptions, iob: ioBroker.Adapter | null);
 
     username: string;
     password: string;
-    iob: ioBroker.Adapter;
+    iob: ioBroker.Adapter | Timers | null;
     options: SunseekerOptions;
+    log: Logger;
 
     session: any;
     devicesRaw: Record<string, any>;
@@ -28,6 +45,7 @@ declare class Sunseeker extends EventEmitter {
     mqttClient: any;
     mqttOldClient: any;
     topUp: boolean;
+    standalone: boolean;
     topUpArrayDeviceSn: string[];
     mqttPassword: string | undefined;
     appId: string | undefined;
@@ -88,24 +106,24 @@ declare class Sunseeker extends EventEmitter {
     updateAllDevices(first: boolean): Promise<void>;
     updateDevice(sn: string): Promise<void>;
     sendCommand(sn: string, command: string, value?: any): Promise<void>;
-    setBlade(sn: string, key: "speed" | "height", value: number): Promise<void>;
-    setSettings(sn: string, value: any, id: string, key: string, addValue: any): Promise<void>;
-    setRain(sn: string, flag: boolean, durationMin: number): Promise<void>;
-    setSchedule(sn: string, plan: Record<string, any>, plan2: Record<string, any>): Promise<void>;
+    setBlade(sn: string, key: "speed" | "height", value: number): Promise<boolean>;
+    setSettings(sn: string, value: any, id: string, key: string, addValue: any): Promise<boolean>;
+    setRain(sn: string, flag: boolean, durationMin: number): Promise<boolean>;
+    setSchedule(sn: string, plan: Record<string, any>, plan2: Record<string, any>): Promise<boolean>;
     parseScheduleDay(value: string): { startSec: number; endSec: number } | null;
     secToHms(sec: number): string;
-    setMowEfficiency(sn: string, gap: number, speed: number): Promise<void>;
-    changePin(sn: string, oldpin: string, newpin: string): Promise<void>;
+    setMowEfficiency(sn: string, gap: number, speed: number): Promise<boolean>;
+    changePin(sn: string, oldpin: string, newpin: string): Promise<boolean>;
     ota_upgrade(sn: string): Promise<void>;
     ota_base_upgrade(sn: string): Promise<void>;
     startUpdateCheck(first: boolean): Promise<void>;
     startUpdateCheckInterval(): Promise<void>;
-    setPlanMode(sn: string, mode: number, angle: any): Promise<void>;
-    setDeviceName(sn: string, val: ioBroker.State | null | undefined): Promise<void>;
-    setAutoUpgrade(sn: string, val: ioBroker.State | null | undefined): Promise<void>;
+    setPlanMode(sn: string, mode: number, angle: any): Promise<boolean>;
+    setDeviceName(sn: string, val: ioBroker.State | null | undefined): Promise<boolean>;
+    setAutoUpgrade(sn: string, val: ioBroker.State | null | undefined): Promise<boolean>;
     setNotice(sn: string, data: any): Promise<void>;
     getNotice(sn: string): Promise<void>;
-    setMarkAllAsRead(sn: string): Promise<void>;
+    setMarkAllAsRead(sn: string): Promise<boolean>;
     getScheduleX(sn: string): Promise<void>;
     getInfo(sn: string): Promise<void>;
     setPatternExpirationTime(sn: string, value: number): Promise<boolean>;
@@ -118,6 +136,16 @@ declare class Sunseeker extends EventEmitter {
     setUnbind(sn: string, data: any, objId: string): Promise<boolean>;
     acceptShareApplyInvite(id: string, val: string, obj: any, sn: string, data: any): Promise<boolean>;
     setTopUp(id: string, sn: string, snList: any[], type: number): Promise<boolean>;
+    delay(ms: number): Promise<void>;
+    messageMakeRead(sn: string, messageId: string): Promise<boolean>;
+    getDeviceSkin(sn: string): Promise<boolean>;
+    getCommunityActivities(sn: string): Promise<boolean>;
+    getErrorMessage(sn: string, type: string, detail: number, model: string, base: number): Promise<boolean>;
+    getAgreements(sn: string): Promise<boolean>;
+    getSettingsX(sn: string): Promise<boolean>;
+    getScheduleX(sn: string): Promise<boolean>;
+    getSharingUser(sn: string, id: string): Promise<boolean>;
+    checkAppUpdate(type: string, version: string): Promise<boolean>;
 
     // mqttV1.js
     connectMqttV1(): void;
@@ -132,7 +160,7 @@ declare class Sunseeker extends EventEmitter {
     onMqttMessage(topic: string, payload: Buffer): void;
     absorbLivemapState(meta: any, statusData: any): void;
     getDeviceProperty(sn: string, body: any): Promise<void>;
-    setDeviceProperty(sn: string, body: any): Promise<void>;
+    setDeviceProperty(sn: string, body: any): Promise<boolean>;
     fetchInitialProperties(): Promise<void>;
     setLiveMap(sn: string, val: boolean): void;
     fetchAllProperties(sn: string): Promise<void>;
