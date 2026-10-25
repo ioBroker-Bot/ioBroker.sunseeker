@@ -215,6 +215,7 @@ class SunseekerAdapter extends utils.Adapter {
         this.sunseeker.on("previewmap", payload => this.onSunseekerPreviewMap(payload));
         this.sunseeker.on("sharing", (sn, data) => this.onSunseekerSharingUser(sn, data));
         this.sunseeker.on("mqttInvite", (sn, data) => this.onSunseekerInviteCheck(sn, data));
+        this.sunseeker.on("deviceSettingsState", (sn, data) => this.onSunseekerDeviceSettingsState(sn, data));
         //this.sunseeker.on("event", payload => this.onSunseekerEvent(payload));
         //this.sunseeker.on("notify", payload => this.onSunseekerNotify(payload));
         //this.sunseeker.on("countUnreadMessage", payload => this.onSunseekerCountUnread(payload));
@@ -4023,25 +4024,7 @@ class SunseekerAdapter extends utils.Adapter {
                 return;
             }
             if (leaf === "pin_new") {
-                if (typeof state.val === "string") {
-                    const numberFormat = /^\d{4}$/;
-                    if (numberFormat.test(state.val)) {
-                        const pin_old = await this.getStateAsync(`${sn}.settings.pin_old`);
-                        if (pin_old && typeof pin_old.val === "string") {
-                            if (numberFormat.test(pin_old.val)) {
-                                this.sunseeker.changePin(sn, pin_old.val, state.val);
-                                this.setState(id, { val: "", ack: true });
-                                this.setState(`${sn}.settings.pin_old`, { val: "", ack: true });
-                            } else {
-                                this.log.warn(`Wrong old pin format!! - ${state.val}`);
-                            }
-                        } else {
-                            this.log.warn(`Missing old pin!! - ${state.val}`);
-                        }
-                    } else {
-                        this.log.warn(`Wrong new pin format!! - ${state.val}`);
-                    }
-                }
+                this.setNewPin(id, sn, state);
                 return;
             }
             if (leaf === "firmware_update_start") {
@@ -4061,8 +4044,7 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "night_work") {
                 if (typeof state.val === "boolean") {
-                    this.sunseeker.setSettings(sn, state.val, "setNightWork", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "boolean", sn, state, "setNightWork", leaf, null);
                 }
                 return;
             }
@@ -4096,27 +4078,24 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "energy_saving_mode") {
                 if (typeof state.val === "boolean") {
-                    this.sunseeker.setSettings(sn, state.val, "setEnergySavingMode", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "boolean", sn, state, "setEnergySavingMode", leaf, null);
                 }
                 return;
             }
             if (leaf === "follow_border_freq") {
                 if (typeof state.val === "number" && (state.val == 1 || state.val == 2 || state.val == 3)) {
-                    this.sunseeker.setSettings(sn, state.val, "setFollowBorderFreq", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "number", sn, state, "setFollowBorderFreq", leaf, null);
                 }
                 return;
             }
             if (leaf === "recharge_mode") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1 || state.val == 2)) {
-                    this.sunseeker.setSettings(sn, state.val, "setRechargeMode", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "number", sn, state, "setRechargeMode", leaf, null);
                 }
                 return;
             }
             if (leaf === "plan_mode") {
-                if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
+                if (typeof state.val === "number" && (state.val == 0 || state.val == 1 || state.val == 3)) {
                     this.sendCommandPromise(leaf, id, sn, state);
                 } else if (typeof state.val === "number" && state.val == 4) {
                     this.sendZigZag(id, sn, state.val, false);
@@ -4137,70 +4116,61 @@ class SunseekerAdapter extends utils.Adapter {
             }
             if (leaf === "dev_model") {
                 if (typeof state.val === "string" && state.val != "") {
-                    this.sunseeker.setSettings(sn, state.val, "setDevModel", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "string", sn, state, "setDevModel", leaf, null);
                 }
                 return;
             }
             if (leaf === "workSpeed") {
                 if (typeof state.val === "number" && (state.val == 1 || state.val == 2 || state.val == 3)) {
-                    const gap = await this.getStateAsync(`${sn}.settings.gap`);
-                    if (gap && gap.val != null && (gap.val == 1 || gap.val == 2 || gap.val == 3)) {
-                        this.sunseeker.setMowEfficiency(sn, gap.val, state.val);
-                        this.setState(id, { val: state.val, ack: true });
-                    }
+                    this.setMowEfficiency(id, sn, null, state);
                 }
                 return;
             }
             if (leaf === "gap") {
                 if (typeof state.val === "number" && (state.val == 1 || state.val == 2 || state.val == 3)) {
-                    const speed = await this.getStateAsync(`${sn}.settings.workSpeed`);
-                    if (speed && speed.val != null && (speed.val == 1 || speed.val == 2 || speed.val == 3)) {
-                        this.sunseeker.setMowEfficiency(sn, state.val, speed.val);
-                        this.setState(id, { val: state.val, ack: true });
-                    }
+                    this.setMowEfficiency(id, sn, state, null);
+                }
+                return;
+            }
+            if (leaf === "follow_border_laps") {
+                if (typeof state.val === "number" && (state.val == 1 || state.val == 2 || state.val == 3)) {
+                    this.setSettingsPromise(id, "number", sn, state, "setFollowBorderLaps", leaf, null);
                 }
                 return;
             }
             if (leaf === "work_touch_mode") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
-                    this.sunseeker.setSettings(sn, state.val, "setWorkTouchMode", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "number", sn, state, "setWorkTouchMode", leaf, null);
                 }
                 return;
             }
             if (leaf === "auto_ride_edge_map_m") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
-                    this.sunseeker.setSettings(sn, state.val, "setAutoRideEdgeMapM", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "number", sn, state, "setAutoRideEdgeMapM", leaf, null);
                 }
                 return;
             }
             if (leaf === "custom_flag") {
                 if (typeof state.val === "boolean") {
-                    this.sunseeker.setSettings(sn, state.val, "setCustomFlag", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "boolean", sn, state, "setCustomFlag", leaf, null);
                 }
                 return;
             }
             if (leaf === "first_along_border") {
                 if (typeof state.val === "boolean") {
-                    this.sunseeker.setSettings(sn, state.val, "setFirstAlongBorder", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "boolean", sn, state, "setFirstAlongBorder", leaf, null);
                 }
                 return;
             }
             if (leaf === "dis_along_border") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
-                    this.sunseeker.setSettings(sn, state.val, "setDisAlongBorder", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "number", sn, state, "setDisAlongBorder", leaf, null);
                 }
                 return;
             }
             if (leaf === "ai_sensitivity") {
                 if (typeof state.val === "number" && (state.val == 0 || state.val == 1)) {
-                    this.sunseeker.setSettings(sn, state.val, "setDisAlongBorder", leaf, null);
-                    this.setState(id, { val: state.val, ack: true });
+                    this.setSettingsPromise(id, "number", sn, state, "setDisAlongBorder", leaf, null);
                 }
                 return;
             }
@@ -4228,6 +4198,56 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         this.sendRemoteCommand(id, sn, command, state);
+    }
+
+    /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {ioBroker.State | null} gap
+     * @param {ioBroker.State | null} speed
+     */
+    async setMowEfficiency(id, sn, gap, speed) {
+        if (!this.sunseeker) {
+            return;
+        }
+        if (gap && typeof gap.val === "number") {
+            const speeds = await this.getStateAsync(`${sn}.settings.workSpeed`);
+            if (speeds && speeds.val != null && (speeds.val == 1 || speeds.val == 2 || speeds.val == 3)) {
+                const status = await this.sunseeker.setMowEfficiency(sn, gap.val, speeds.val);
+                if (status) {
+                    await this.setState(id, { val: gap.val, ack: true });
+                }
+            }
+        } else if (speed && typeof speed.val === "number") {
+            const gaps = await this.getStateAsync(`${sn}.settings.gap`);
+            if (gaps && gaps.val != null && (gaps.val == 1 || gaps.val == 2 || gaps.val == 3)) {
+                const status = await this.sunseeker.setMowEfficiency(sn, gaps.val, speed.val);
+                if (status) {
+                    await this.setState(id, { val: speed.val, ack: true });
+                }
+            }
+        }
+    }
+
+    /**
+     * @param {string} objectId
+     * @param {string} type
+     * @param {string} sn
+     * @param {ioBroker.State} state
+     * @param {string} id
+     * @param {string} key
+     * @param {any} addValue
+     */
+    async setSettingsPromise(objectId, type, sn, state, id, key, addValue) {
+        if (!this.sunseeker) {
+            return;
+        }
+        if (typeof state.val === type) {
+            const status = await this.sunseeker.setSettings(sn, state.val, id, key, addValue);
+            if (status) {
+                await this.setState(objectId, { val: state.val, ack: true });
+            }
+        }
     }
 
     /**
@@ -4513,6 +4533,38 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     /**
+     * @param {string} id
+     * @param {string} sn
+     * @param {ioBroker.State} state
+     */
+    async setNewPin(id, sn, state) {
+        if (!this.sunseeker) {
+            return;
+        }
+        if (typeof state.val === "string") {
+            const numberFormat = /^\d{4}$/;
+            if (numberFormat.test(state.val)) {
+                const pin_old = await this.getStateAsync(`${sn}.settings.pin_old`);
+                if (pin_old && typeof pin_old.val === "string") {
+                    if (numberFormat.test(pin_old.val)) {
+                        const status = await this.sunseeker.changePin(sn, pin_old.val, state.val);
+                        if (status) {
+                            await this.setState(id, { val: "", ack: true });
+                            await this.setState(`${sn}.settings.pin_old`, { val: "", ack: true });
+                        }
+                    } else {
+                        this.log.warn(`Wrong old pin format!! - ${state.val}`);
+                    }
+                } else {
+                    this.log.warn(`Missing old pin!! - ${state.val}`);
+                }
+            } else {
+                this.log.warn(`Wrong new pin format!! - ${state.val}`);
+            }
+        }
+    }
+
+    /**
      * @param {string} type
      * @param {string} id
      * @param {string} sn
@@ -4748,9 +4800,11 @@ class SunseekerAdapter extends utils.Adapter {
         }
         const key = command === "bladeSpeed" ? "speed" : "height";
         try {
-            await this.sunseeker.setBlade(sn, key, Number(state.val));
-            this.updateDeviceAfterStateChange(sn);
-            this.setState(id, { val: state.val, ack: true });
+            const status = await this.sunseeker.setBlade(sn, key, Number(state.val));
+            if (status) {
+                this.updateDeviceAfterStateChange(sn);
+                await this.setState(id, { val: state.val, ack: true });
+            }
         } catch (err) {
             this.log.error(`Blade-${key} for ${sn} failed: ${err.message}`);
         }
@@ -4831,9 +4885,11 @@ class SunseekerAdapter extends utils.Adapter {
                 command === "rainDelayDuration"
                     ? state.val
                     : (await this.getStateAsync(`${sn}.settings.rainDelayDuration`))?.val;
-            await this.sunseeker.setRain(sn, Boolean(flagVal), Math.round(Number(durVal) || 0));
-            this.updateDeviceAfterStateChange(sn);
-            this.setState(id, { val: state.val, ack: true });
+            const status = await this.sunseeker.setRain(sn, Boolean(flagVal), Math.round(Number(durVal) || 0));
+            if (status) {
+                this.updateDeviceAfterStateChange(sn);
+                await this.setState(id, { val: state.val, ack: true });
+            }
         } catch (err) {
             this.log.error(`Rain delay for ${sn} failed: ${err.message}`);
         }
@@ -4887,8 +4943,8 @@ class SunseekerAdapter extends utils.Adapter {
             try {
                 const raw = JSON.parse(state);
                 this.log.debug(JSON.stringify(raw));
-                if (raw.plan_mode === 2 || raw.plan_mode === 3 || raw.plan_mode > 4 || raw.plan_mode < 0) {
-                    this.log.error(`plan_mode: Only 0, 1 and 4 are allowed!`);
+                if (raw.plan_mode === 2 || raw.plan_mode > 4 || raw.plan_mode < 0) {
+                    this.log.error(`plan_mode: Only 0, 1. 3 and 4 are allowed!`);
                     return;
                 }
                 if (raw.start !== 0 && raw.start !== 1) {
@@ -6344,6 +6400,16 @@ class SunseekerAdapter extends utils.Adapter {
                 await this.sunseeker.createDataPoint(`${this.namespace}.${path}`, common, "state", null, null, null);
             }
         }
+    }
+
+    /**
+     * @param {string} sn
+     * @param {any} data
+     */
+    async onSunseekerDeviceSettingsState(sn, data) {
+        this.log.debug(`SettingsState: ${JSON.stringify(data)}`);
+        await this.setSettings(sn, data);
+        //await this.setMowerRaw(sn, data);
     }
 
     /**
