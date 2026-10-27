@@ -100,6 +100,8 @@ declare class Sunseeker extends EventEmitter {
     getUpdateSharing(): Promise<void>;
     hexToRGBA(hex: string | boolean | number): void;
     patternSize(pattern: string): Promise<number>;
+    function_checks(): void;
+    function_check(sn: string, check: string): Promise<boolean>;
 
     // polling-and-settings.js
     startPolling(): void;
