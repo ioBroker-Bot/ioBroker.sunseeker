@@ -1744,6 +1744,9 @@ class SunseekerAdapter extends utils.Adapter {
             this.onSunseekerCustomMultiZigZag({ sn, data });
             return;
         }
+        if (data.support_custom_pattern_size) {
+            delete data.support_custom_pattern_size;
+        }
         if (data.time && typeof data.time === "object" && data.time !== null) {
             const time_schedule = Object.assign({}, data);
             this.cleanUpCalendar(sn, time_schedule, 1);
@@ -1797,6 +1800,20 @@ class SunseekerAdapter extends utils.Adapter {
             delete data.status;
             this.setMowerRaw(sn, data);
             return;
+        }
+        if (data.rain_countdown != null) {
+            if (!data.rain) {
+                data.rain = {};
+            }
+            data.rain["rain_countdown"] = data.rain_countdown;
+            delete data.rain_countdown;
+        }
+        if (data.rain_status != null) {
+            if (!data.rain) {
+                data.rain = {};
+            }
+            data.rain["rain_status"] = data.rain_status;
+            delete data.rain_status;
         }
         if (id == "report_notice") {
             const notice = {
@@ -3006,47 +3023,47 @@ class SunseekerAdapter extends utils.Adapter {
                         await this.json2iob.parse(`${sn}.map.blank`, map_info.region_blank, {
                             channelName: {
                                 name: {
-                                    en: "Blank areas",
-                                    de: "Leere Bereiche",
-                                    ru: "Пустые участки",
-                                    pt: "Áreas em branco",
-                                    nl: "Lege gebieden",
-                                    fr: "Zones vides",
-                                    it: "Area vuota",
-                                    es: "Áreas en blanco",
-                                    pl: "Puste obszary",
-                                    uk: "Пусті області",
-                                    "zh-cn": "空白区域",
+                                    en: "Boundary properties",
+                                    de: "Kanteneigenschaften",
+                                    ru: "Свойства ребер",
+                                    pt: "Propriedades de borda",
+                                    nl: "Randeigenschappen",
+                                    fr: "Propriétés de bord",
+                                    it: "Proprietà dei bordi",
+                                    es: "Propiedades de borde",
+                                    pl: "Właściwości krawędzi",
+                                    uk: "Властивості ребра",
+                                    "zh-cn": "边缘属性",
                                 },
                                 icon: "img/blank.png",
                             },
                             forceIndex: true,
                         });
                         const lang_b = {
-                            en: "Blank area delete",
-                            de: "Leeren Bereich löschen",
-                            ru: "Удалить пустую область",
-                            pt: "Excluir área em branco",
-                            nl: "Leeg gebied verwijderen",
-                            fr: "Supprimer la zone vide",
-                            it: "area vuota elimina",
-                            es: "eliminar área en blanco",
-                            pl: "Usuń pusty obszar",
-                            uk: "Видалення порожньої області",
-                            "zh-cn": "空白区域删除",
+                            en: "Delete Boundary property",
+                            de: "Kanteneigenschaft löschen",
+                            ru: "Удалить свойство ребра",
+                            pt: "Excluir propriedade de borda",
+                            nl: "Randeigenschap verwijderen",
+                            fr: "Supprimer la propriété de bord",
+                            it: "Elimina la proprietà del bordo",
+                            es: "Eliminar propiedad de borde",
+                            pl: "Usuń właściwość krawędzi",
+                            uk: "Видалити властивість ребра",
+                            "zh-cn": "删除边属性",
                         };
                         const name_b = {
-                            en: "Blank areas <br>",
-                            de: "Leere Bereiche <br>",
-                            ru: "Пустые участки <br>",
-                            pt: "Áreas em branco <br>",
-                            nl: "Lege gebieden <br>",
-                            fr: "Zones vides <br>",
-                            it: "Area vuota <br>",
-                            es: "Áreas en blanco <br>",
-                            pl: "Puste obszary <br>",
-                            uk: "Пусті області <br>",
-                            "zh-cn": "空白区域 <br>",
+                            en: "Boundary property <br>",
+                            de: "Kanteneigenschaft <br>",
+                            ru: "Краевая собственность <br>",
+                            pt: "Propriedade Edge <br>",
+                            nl: "Randeigenschap <br>",
+                            fr: "Propriété de bord <br>",
+                            it: "proprietà del bordo <br>",
+                            es: "Propiedad Edge <br>",
+                            pl: "Właściwość krawędzi <br>",
+                            uk: "Властивість краю <br>",
+                            "zh-cn": "边缘属性 <br>",
                         };
                         this.sunseeker.addDeleteObject(
                             sn,
@@ -4201,6 +4218,31 @@ class SunseekerAdapter extends utils.Adapter {
     }
 
     /**
+     * @param {string} sn
+     */
+    async editBoundary(sn) {
+        if (!this.sunseeker) {
+            return;
+        }
+        const last_edge = [];
+        const new_edge = [];
+        const region_id = 123;
+        await this.sunseeker.setDeviceProperty(sn, {
+            id: "setDrawEdge",
+            key: "draw_edge",
+            area_info: [
+                {
+                    flag: 0,
+                    last_edge: last_edge,
+                    new_edge: new_edge,
+                    region_id: region_id,
+                    type: 0,
+                },
+            ],
+        });
+    }
+
+    /**
      * @param {string} id
      * @param {string} sn
      * @param {ioBroker.State | null} gap
@@ -4347,6 +4389,7 @@ class SunseekerAdapter extends utils.Adapter {
         let key_send = "";
         /**
          * type = 0 region_work -> zones -> *
+         * type = 1 region_blank -> blank -> map.blank
          * type = 2 region_channel -> passage area -> map.passages
          * type = 3 region_obstacle -> obstacle area -> map.obstacles
          * type = 4 region_forbidden -> forbidden area -> map.forbidden
@@ -4483,11 +4526,11 @@ class SunseekerAdapter extends utils.Adapter {
         let type = -1;
         /**
          * type = 0 region_work -> zones -> *
+         * type = 1 region_blank -> blank -> map.blank ->
          * type = 2 region_channel -> passage area -> map.passages
          * type = 3 region_obstacle -> obstacle area -> map.obstacles
          * type = 4 region_forbidden -> forbidden area -> map.forbidden
          * type = 8 region_placed_blank -> safe area -> map.placed_blank
-         * type = ? region_blank -> blank -> map.blank
          * type = ? region_forbid_trim
          * type = ? divide_area_work
          */
@@ -4645,7 +4688,7 @@ class SunseekerAdapter extends utils.Adapter {
                         const newPattern = {
                             img_value: img.val,
                             last_edit_time: actTime,
-                            min_width: 2.4,
+                            min_width: this.sunseeker.patternSize(img.val),
                             vertexs: JSON.parse(points.val),
                             img_id: actTime - 58535,
                         };
@@ -5678,7 +5721,7 @@ class SunseekerAdapter extends utils.Adapter {
                 );
             }
         } else if (command === "share_apply_invite") {
-            if (state && state.val) {
+            if (state && state.val && state.val != "none") {
                 const data = {
                     deviceSn: state.val,
                     accept: 1,
@@ -5688,7 +5731,7 @@ class SunseekerAdapter extends utils.Adapter {
                     if (obj && obj.common && obj.common.states) {
                         delete obj.common.states[state.val];
                         const new_obj = JSON.parse(JSON.stringify(obj));
-                        const status = await this.sunseeker.acceptShareApplyInvite(id, state.val, new_obj, sn, data);
+                        const status = await this.sunseeker.acceptShareApplyInvite(id, "none", new_obj, sn, data);
                         if (status) {
                             this.restart();
                         }
