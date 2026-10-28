@@ -4393,10 +4393,14 @@ class SunseekerAdapter extends utils.Adapter {
          * type = 2 region_channel -> passage area -> map.passages
          * type = 3 region_obstacle -> obstacle area -> map.obstacles
          * type = 4 region_forbidden -> forbidden area -> map.forbidden
+         * type = 6 region_customize
          * type = 8 region_placed_blank -> safe area -> map.placed_blank
-         * type = ? region_blank -> blank -> map.blank
-         * type = ? region_forbid_trim
+         * type = 12 region_forbid_trim
          * type = ? divide_area_work
+         * MAP_TYPE_BATCH_DELETE = 11
+         * MAP_TYPE_EDIT_EDGE = 5
+         * MAP_TYPE_PASS_CHARGE = 9
+         * MAP_TYPE_POINT_CUT = 10
          */
         let type = "";
         let point = "";
@@ -4524,16 +4528,6 @@ class SunseekerAdapter extends utils.Adapter {
             return;
         }
         let type = -1;
-        /**
-         * type = 0 region_work -> zones -> *
-         * type = 1 region_blank -> blank -> map.blank ->
-         * type = 2 region_channel -> passage area -> map.passages
-         * type = 3 region_obstacle -> obstacle area -> map.obstacles
-         * type = 4 region_forbidden -> forbidden area -> map.forbidden
-         * type = 8 region_placed_blank -> safe area -> map.placed_blank
-         * type = ? region_forbid_trim
-         * type = ? divide_area_work
-         */
         switch (zone) {
             case "passages":
                 type = 2;
